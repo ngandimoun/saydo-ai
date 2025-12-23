@@ -1,5 +1,25 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Project Stack
+
+- **Framework**: Next.js 15 (App Router) with TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui (Slate theme)
+- **State Management**: Legend-State
+- **Backend**: Supabase
+- **PWA**: Serwist
+- **Animation**: Framer Motion
+- **Validation**: Zod
+
+## shadcn MCP Server
+
+This project has the **shadcn MCP server** configured (`.cursor/mcp.json`). This enables AI assistants to:
+- Browse and search components from shadcn registries
+- Install components using natural language
+- Create bespoke components for specific use cases
+- Access component examples and patterns
+
+When working with components, always leverage the shadcn MCP tools for better component management and creation.
+
 ## Getting Started
 
 First, run the development server:

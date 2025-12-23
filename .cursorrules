@@ -1,0 +1,66 @@
+# Saydo Project Rules
+
+## shadcn MCP Server
+**IMPORTANT**: This project has shadcn MCP server configured at `.cursor/mcp.json`.
+
+**Always use the shadcn MCP tools** when:
+- Browsing or searching for components
+- Installing shadcn/ui components
+- Creating bespoke/custom components for specific use cases
+- Looking for component patterns or examples
+
+The shadcn MCP provides access to:
+- Component browsing and searching across registries
+- Natural language component installation
+- Component examples and demos
+- Custom component creation for bespoke requirements
+
+**Available MCP Tools:**
+- `mcp_shadcn_list_items_in_registries` - Browse available components
+- `mcp_shadcn_search_items_in_registries` - Search for components
+- `mcp_shadcn_view_items_in_registries` - View component details
+- `mcp_shadcn_get_item_examples_from_registries` - Get usage examples
+- `mcp_shadcn_get_add_command_for_items` - Get installation commands
+
+**When creating custom components**, use the MCP to:
+1. Search for similar patterns
+2. Reference component structure
+3. Get examples and best practices
+4. Ensure consistency with shadcn/ui patterns
+
+## Replicate Image Generation
+**IMPORTANT**: This project uses Replicate API with nano-banana-pro for generating high-quality images.
+
+**Always use Replicate for image generation** when:
+- Creating background images for UI
+- Generating profile pictures or avatars
+- Creating card UI graphics
+- Building hero images or banners
+- Any other image needs for the Saydo application
+
+**Image Generation Service:**
+- Located in `lib/image-service.ts`
+- Uses `google/nano-banana-pro` model via Replicate
+- Automatically uploads to Supabase Storage bucket `generated-images`
+- Returns public URLs ready for frontend use
+
+**Available Functions:**
+- `generateAndStoreImage()` - Main function for generating and storing images
+- `generateBackgroundImage()` - Helper for background images (16:9 or 21:9)
+- `generateProfileImage()` - Helper for profile pictures (1:1)
+- `generateCardImage()` - Helper for card graphics (4:3, 16:9, or 1:1)
+- `generateHeroImage()` - Helper for hero images (16:9 or 21:9, 4K resolution)
+
+**Best Practices:**
+1. Always use the appropriate helper function for the use case
+2. Use PNG format for graphics needing transparency
+3. Use JPG format for photos to reduce file size
+4. Use 4K resolution only for hero images
+5. Write descriptive prompts optimized for UI design
+6. Cache generated images - don't regenerate the same image multiple times
+7. Handle errors gracefully with user-friendly messages
+
+**Documentation:** See `docs/replicate-image-generation.md` for complete guide.
+
+**Environment:** Requires `REPLICATE_API_TOKEN` in `.env.local`
+
