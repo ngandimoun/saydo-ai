@@ -1,5 +1,8 @@
 import { createClient } from "./supabase-server";
 
+// Re-export client-safe utilities for backward compatibility
+export { getImagePublicUrl } from "./storage-urls";
+
 const BUCKET_NAME = "generated-images";
 
 export interface UploadImageOptions {
@@ -115,18 +118,5 @@ export async function deleteImageFromSupabase(
   }
 }
 
-/**
- * Gets the public URL for an image in Supabase Storage
- */
-export function getImagePublicUrl(filePath: string): string {
-  // We need to create a client to get the URL
-  // For server-side, we'll construct it manually
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
-  }
 
-  // Supabase Storage public URL format
-  return `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
-}
 

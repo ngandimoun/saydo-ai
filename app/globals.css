@@ -3,10 +3,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================
+   SAYDO DESIGN SYSTEM
+   Elegant, Warm, Apple-Inspired
+   ============================================ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-dm-sans);
+  --font-serif: var(--font-playfair);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -46,80 +52,396 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+/* ============================================
+   SAYDO BRAND COLORS - Warm Teal Theme
+   ============================================ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.75rem;
+  
+  /* Saydo Brand - Warm Teal */
+  --saydo-teal: #0D9488;
+  --saydo-teal-light: #14B8A6;
+  --saydo-teal-dark: #0F766E;
+  --saydo-teal-glow: rgba(13, 148, 136, 0.4);
+  
+  /* Warm Background Palette - Calm Cream */
+  --saydo-cream: #F7F5F0;
+  --saydo-cream-dark: #F0EDE6;
+  --saydo-warm-white: #FDFCFA;
+  
+  /* Text Colors */
+  --saydo-charcoal: #1F2937;
+  --saydo-gray: #6B7280;
+  --saydo-gray-light: #9CA3AF;
+  
+  /* UI Colors */
+  --background: #F7F5F0;
+  --foreground: #1F2937;
+  --card: #FDFCFA;
+  --card-foreground: #1F2937;
+  --popover: #FDFCFA;
+  --popover-foreground: #1F2937;
+  --primary: #0D9488;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F0EDE6;
+  --secondary-foreground: #1F2937;
+  --muted: #F0EDE6;
+  --muted-foreground: #6B7280;
+  --accent: #E6F7F5;
+  --accent-foreground: #0D9488;
+  --destructive: #EF4444;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #0D9488;
+  --chart-1: #0D9488;
+  --chart-2: #14B8A6;
+  --chart-3: #2DD4BF;
+  --chart-4: #5EEAD4;
+  --chart-5: #99F6E4;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2937;
+  --sidebar-primary: #0D9488;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E6F7F5;
+  --sidebar-accent-foreground: #0D9488;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #0D9488;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #1E293B;
+  --popover-foreground: #F8FAFC;
+  --primary: #14B8A6;
+  --primary-foreground: #0F172A;
+  --secondary: #334155;
+  --secondary-foreground: #F8FAFC;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #134E4A;
+  --accent-foreground: #5EEAD4;
+  --destructive: #F87171;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #14B8A6;
+  --chart-1: #14B8A6;
+  --chart-2: #2DD4BF;
+  --chart-3: #5EEAD4;
+  --chart-4: #99F6E4;
+  --chart-5: #CCFBF1;
+  --sidebar: #1E293B;
+  --sidebar-foreground: #F8FAFC;
+  --sidebar-primary: #14B8A6;
+  --sidebar-primary-foreground: #0F172A;
+  --sidebar-accent: #134E4A;
+  --sidebar-accent-foreground: #5EEAD4;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #14B8A6;
 }
 
+/* ============================================
+   BASE STYLES
+   ============================================ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
+  
+  /* Elegant selection */
+  ::selection {
+    background: rgba(13, 148, 136, 0.2);
+    color: var(--saydo-charcoal);
+  }
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+.font-serif {
+  font-family: var(--font-playfair), Georgia, 'Times New Roman', serif;
+}
+
+.font-sans {
+  font-family: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Headline styles */
+.saydo-headline {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.saydo-headline-italic {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Body text */
+.saydo-body {
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================
+   ANIMATIONS - The "Alive" Feel
+   ============================================ */
+
+/* Gentle pulse for the record button */
+@keyframes saydo-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 12px rgba(13, 148, 136, 0);
+  }
+}
+
+/* Breathing glow effect */
+@keyframes saydo-breathe {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Soft ping for recording state */
+@keyframes saydo-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  75%, 100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Waveform animation */
+@keyframes waveform {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Fade in up animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Gentle float animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Animation utility classes */
+.animate-saydo-pulse {
+  animation: saydo-pulse 2.5s ease-in-out infinite;
+}
+
+.animate-saydo-breathe {
+  animation: saydo-breathe 3s ease-in-out infinite;
+}
+
+.animate-saydo-ping {
+  animation: saydo-ping 1.5s ease-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Staggered animation delays */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+
+/* ============================================
+   COMPONENTS
+   ============================================ */
+
+/* Elegant card with soft shadow */
+.saydo-card {
+  background: var(--card);
+  border-radius: 1.25rem;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03),
+    0 0 0 1px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+}
+
+.saydo-card:hover {
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+  transform: translateY(-2px);
+}
+
+/* Teal gradient button */
+.saydo-button-primary {
+  background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-dark) 100%);
+  color: white;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.875rem 2rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+}
+
+.saydo-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+}
+
+.saydo-button-primary:active {
+  transform: translateY(0);
+}
+
+/* Ghost button */
+.saydo-button-ghost {
+  background: transparent;
+  color: var(--saydo-charcoal);
+  font-weight: 500;
+  border-radius: 9999px;
+  padding: 0.875rem 2rem;
+  border: 1.5px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.saydo-button-ghost:hover {
+  background: var(--saydo-cream-dark);
+  border-color: var(--saydo-gray-light);
+}
+
+/* Record button - the signature element */
+.saydo-record-button {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 4px 20px rgba(13, 148, 136, 0.3),
+    0 0 0 0 rgba(13, 148, 136, 0.4);
+  position: relative;
+}
+
+.saydo-record-button:hover {
+  transform: scale(1.05);
+  box-shadow: 
+    0 8px 30px rgba(13, 148, 136, 0.4),
+    0 0 0 4px rgba(13, 148, 136, 0.1);
+}
+
+.saydo-record-button:active {
+  transform: scale(0.98);
+}
+
+/* Recording state card */
+.saydo-recording-card {
+  background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-dark) 100%);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  color: white;
+}
+
+/* Section divider with warm gradient */
+.saydo-section-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg, 
+    transparent 0%, 
+    var(--border) 20%, 
+    var(--border) 80%, 
+    transparent 100%
+  );
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS
+   ============================================ */
+@media (max-width: 768px) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .saydo-record-button {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+}
+
+/* Touch manipulation for better mobile performance */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================
+   SMOOTH SCROLLING & ACCESSIBILITY
+   ============================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--saydo-teal);
+  outline-offset: 2px;
 }

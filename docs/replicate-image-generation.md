@@ -235,3 +235,4 @@ Main function for generating and storing images.
 3. Specify style and quality in prompt
 4. Use appropriate aspect ratio for use case
 
+

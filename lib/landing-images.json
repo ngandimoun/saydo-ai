@@ -1,0 +1,38 @@
+{
+  "before-after-comparison": {
+    "url": "",
+    "path": "landing/before-after-comparison.png"
+  },
+  "how-it-works-visual": {
+    "url": "",
+    "path": "landing/how-it-works-visual.png"
+  },
+  "ai-agent-workflow": {
+    "url": "",
+    "path": "landing/ai-agent-workflow.png"
+  },
+  "agent-vs-transcription": {
+    "url": "",
+    "path": "landing/agent-vs-transcription.png"
+  },
+  "use-case-healthcare": {
+    "url": "",
+    "path": "landing/use-cases/use-case-healthcare.png"
+  },
+  "use-case-founder": {
+    "url": "",
+    "path": "landing/use-cases/use-case-founder.png"
+  },
+  "use-case-caregiver": {
+    "url": "",
+    "path": "landing/use-cases/use-case-caregiver.png"
+  },
+  "use-case-writer": {
+    "url": "",
+    "path": "landing/use-cases/use-case-writer.png"
+  },
+  "use-case-technician": {
+    "url": "",
+    "path": "landing/use-cases/use-case-technician.png"
+  }
+}
