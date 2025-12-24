@@ -18,7 +18,7 @@ export const Footer = () => {
               </span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Turn messy thoughts into clear action.
+              The first AI that knows your mind and your body.
             </p>
           </div>
 

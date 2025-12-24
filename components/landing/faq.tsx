@@ -8,51 +8,51 @@ import { cn } from "@/lib/utils"
 const faqs = [
   {
     question: "What is Saydo?",
-    answer: "Saydo is your voice-first AI co-pilot. You speak, and Saydo turns your words into real work: notes, tasks, reminders, emails, and summaries. No typing needed. Just talk naturally, and Saydo handles the rest.",
+    answer: "Saydo is your personal AI partner that knows your whole life — work and wellness together. Speak your thoughts, scan your lab results, connect your wearables. Saydo turns it all into actions that actually fit YOU: tasks scheduled around your energy, groceries based on your biology, and nudges that know when to push and when to rest.",
   },
   {
-    question: "How does it work?",
-    answer: "You tap record and speak. Saydo listens, understands what you mean, and creates the right thing automatically. If you mention a task, it creates a reminder. If you share an idea, it saves it as a note. You don't need to tell Saydo what to do—it just knows.",
+    question: "What can I feed to Saydo?",
+    answer: "Everything. Voice notes, meeting recordings, lab result PDFs, clinic reports, photos of documents. Connect your wearables (Oura, Apple Watch, Garmin) and Saydo syncs your sleep, HRV, and activity data. The more you give it, the smarter it gets about YOU.",
   },
   {
-    question: "Who is Saydo for?",
-    answer: "Saydo is perfect for busy professionals whose hands are already full. Nurses documenting patient care, pharmacists managing prescriptions, caregivers tracking daily activities, mechanics writing service reports, or founders capturing quick ideas. If you think faster than you type, Saydo is for you.",
+    question: "How does Saydo know when I'm tired?",
+    answer: "Saydo connects the dots. It sees your sleep data from your wearable, correlates it with your lab results (iron, vitamin D, cortisol), and notices patterns in your voice notes. When you say 'I'm stressed about the launch,' Saydo doesn't just log it — it checks if your biology backs that up and adjusts your day accordingly.",
   },
   {
-    question: "Do I need to learn commands?",
-    answer: "No. Just speak naturally. Saydo understands regular speech. You can ramble, think out loud, or give quick updates. Saydo figures out what you need and creates it automatically.",
+    question: "Is this a productivity app or a health app?",
+    answer: "Neither. It's both. That's the whole point. Your work and your body aren't separate — why should your apps be? Saydo is the first AI that sees the whole you: your tasks, your energy, your biology, your goals. One partner for your whole life.",
+  },
+  {
+    question: "Is my health data private?",
+    answer: "Absolutely. Your data is encrypted, stored securely, and never shared with anyone. We don't sell your information. We don't use it for ads. Your voice notes, lab results, and health data belong to you — period. You can export or delete everything anytime.",
+  },
+  {
+    question: "What wearables and devices work with Saydo?",
+    answer: "Saydo connects with Oura Ring, Apple Watch, Apple Health, Google Fit, Garmin, Whoop, and Fitbit. We're adding more all the time. Your wearable data syncs automatically — no manual entry needed.",
+  },
+  {
+    question: "Do I need to learn special commands?",
+    answer: "No. Just speak naturally. Ramble, think out loud, or give quick updates. Saydo figures out what you need and creates it. Say 'I had a rough night and I'm worried about the investor meeting tomorrow' — Saydo will reschedule your deep work AND suggest the right foods to boost your energy.",
+  },
+  {
+    question: "How accurate is the lab analysis?",
+    answer: "Saydo uses advanced AI to parse standard lab reports from clinics and labs. It identifies biomarkers, flags abnormals, and translates them into actionable advice. While it's not a replacement for your doctor, it helps you understand your results and take daily action to improve them.",
+  },
+  {
+    question: "Can Saydo connect to my calendar and email?",
+    answer: "Yes. With Pro, connect Google Calendar, Outlook, and your email. Saydo can schedule tasks, send meeting summaries, and block time for recovery — all based on what it knows about your capacity that day.",
   },
   {
     question: "What languages does Saydo support?",
-    answer: "Saydo understands over 100 languages. You can speak in any language, and Saydo will process it correctly. You can even mix languages in the same recording.",
-  },
-  {
-    question: "Can I whisper or speak quietly?",
-    answer: "Yes. Saydo works great even when you whisper or speak quietly. It's designed to understand your voice in any situation, whether you're in a busy hospital, quiet office, or noisy workshop.",
-  },
-  {
-    question: "Is my data private and secure?",
-    answer: "Yes. Your voice notes and data are encrypted and stored securely. We never share your information with anyone. Your notes belong to you, and you can delete them anytime.",
-  },
-  {
-    question: "Can Saydo connect to my email and calendar?",
-    answer: "Yes. With Pro, you can connect your email and calendar. Saydo can create emails from your voice notes, schedule reminders, and help you stay organized across all your tools.",
-  },
-  {
-    question: "Can I export my notes?",
-    answer: "Yes. You can export your notes, summaries, and documents in multiple formats. Share them, save them, or use them anywhere you need.",
-  },
-  {
-    question: "What's the difference between Free and Pro?",
-    answer: "Free gives you 5 minutes of voice recording per day with basic summaries. Pro gives you unlimited voice recording, AI agent workflows, email integration, and advanced features. Try Free first, then upgrade when you're ready.",
+    answer: "Saydo understands over 100 languages. Speak in any language, and Saydo processes it correctly. You can even mix languages in the same recording — perfect for multilingual households and global teams.",
   },
   {
     question: "Does Saydo work offline?",
-    answer: "Saydo needs an internet connection to process your voice and create actions. But you can record offline, and Saydo will process everything when you're back online.",
+    answer: "Saydo needs an internet connection to process your voice and run AI analysis. But you can record offline — Saydo will process everything when you're back online. Your data syncs seamlessly across devices.",
   },
   {
-    question: "How accurate is Saydo?",
-    answer: "Saydo is highly accurate. It understands context, recognizes names, and captures your meaning precisely—even when you speak quickly or use specialized terminology.",
+    question: "What's the difference between Free and Pro?",
+    answer: "Free gives you 5 minutes of voice per day and basic features — enough to see how Saydo works. Pro unlocks everything: unlimited voice and scans, full health intelligence, wearable connections, and multi-device sync. One price, no feature gates.",
   },
 ]
 

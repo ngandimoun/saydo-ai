@@ -104,7 +104,7 @@ export const Navbar = () => {
         ) : (
           <Button
             onClick={handleLogin}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm rounded-full px-5 sm:px-6 min-h-[44px] shadow-sm hover:shadow-md transition-all duration-300 touch-manipulation"
+            className="justify-start bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105 active:translate-y-0.5 font-medium text-sm rounded-full px-5 sm:px-6 min-h-[44px] shadow-sm hover:shadow-md transition-all duration-300 ease-out touch-manipulation"
           >
             <span className="hidden sm:inline">Login with Google</span>
             <span className="sm:hidden">Login</span>

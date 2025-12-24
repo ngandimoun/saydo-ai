@@ -1,25 +1,31 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowRight, Mic, Sparkles, FileText, CheckCircle2, Brain } from "lucide-react"
+import { ArrowRight, Upload, Zap, Target, CheckCircle2, Brain } from "lucide-react"
 import { OptionalImage } from "@/components/ui/optional-image"
 import { getLandingImageUrl } from "@/lib/landing-images"
 
 const steps = [
   {
-    icon: Mic,
-    title: "Speak Naturally",
-    description: "Just talk. No structure needed. Ramble, think out loud, brainstorm, or dictate quick updates.",
+    icon: Upload,
+    title: "Feed Saydo",
+    description: "Speak your thoughts. Snap a lab result. Connect your watch. Saydo accepts it all.",
+    color: "text-primary",
+    bg: "bg-primary/10",
   },
   {
     icon: Brain,
-    title: "Smart AI Processing",
-    description: "Saydo understands context, extracts actions, and organizes your thoughts — not just transcription.",
+    title: "Saydo Connects the Dots",
+    description: "Not just transcription. Not just tracking. Saydo sees how your work, sleep, and biology interact.",
+    color: "text-amber-500",
+    bg: "bg-amber-500/10",
   },
   {
-    icon: FileText,
-    title: "Polished Output",
-    description: "Receive professional summaries, actionable tasks, and ready-to-send emails in seconds.",
+    icon: Target,
+    title: "Live Smarter",
+    description: "Receive actions that actually fit YOUR life. A grocery list based on YOUR labs. A schedule that respects YOUR energy.",
+    color: "text-rose-500",
+    bg: "bg-rose-500/10",
   },
 ]
 
@@ -42,10 +48,10 @@ export const HowItWorks = () => {
             How It Works
           </h2>
           <p className="saydo-body text-muted-foreground text-lg max-w-2xl mx-auto mb-4">
-            From voice to action in seconds
+            One simple flow for your whole life
           </p>
           <p className="text-primary text-sm font-semibold uppercase tracking-wider">
-            Not just transcription — intelligent AI processing
+            Feed it anything. Get back clarity.
           </p>
         </motion.div>
 
@@ -60,14 +66,14 @@ export const HowItWorks = () => {
           <div className="saydo-card p-5 sm:p-8 border border-primary/20 bg-gradient-to-br from-card to-accent/30">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Brain className="text-primary w-5 h-5" />
+                <Zap className="text-primary w-5 h-5" />
               </div>
-              <h3 className="text-xl sm:text-2xl font-semibold text-foreground">AI Agent Workflow</h3>
+              <h3 className="text-xl sm:text-2xl font-semibold text-foreground">Your Personal Intelligence</h3>
             </div>
             <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-secondary">
               <OptionalImage
                 src={getLandingImageUrl("ai-agent-workflow")}
-                alt="AI Agent Workflow - Voice to Action"
+                alt="AI Agent Workflow - Voice and Health to Action"
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
@@ -75,7 +81,7 @@ export const HowItWorks = () => {
               />
             </div>
             <p className="text-muted-foreground text-sm mt-4 text-center">
-              Saydo&apos;s AI agent understands context, extracts actions, and creates structured workflows — not just words on a page
+              Saydo understands context across your whole life — work, health, energy — and gives you actions that actually work for you
             </p>
           </div>
         </motion.div>
@@ -86,7 +92,7 @@ export const HowItWorks = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="grid md:grid-cols-2 gap-5 sm:gap-8 mb-12"
+          className="grid md:grid-cols-2 gap-5 sm:gap-8 mb-16"
         >
           {/* Before */}
           <div className="saydo-card p-5 sm:p-6 border border-border">
@@ -96,17 +102,15 @@ export const HowItWorks = () => {
                 Without Saydo
               </span>
             </div>
-            <div className="space-y-3 text-sm text-muted-foreground">
+            <div className="space-y-4 text-sm text-muted-foreground">
               <p className="italic leading-relaxed">
-                &ldquo;um so like I had this meeting today with the investors and we
-                talked about the Q3 roadmap and I think we need to pivot
-                something about the market opportunity and oh yeah I need to send
-                them the pitch deck by Friday and also schedule a follow-up
-                meeting for next week maybe Tuesday or Wednesday...&rdquo;
+                &ldquo;I have 10 apps for productivity and 5 for health. None of them talk to each other. 
+                My calendar says 'work harder' when my body is screaming 'rest.' I&apos;m drowning in data 
+                but still feel lost.&rdquo;
               </p>
               <div className="pt-4 border-t border-border">
                 <p className="text-muted-foreground/70 text-xs">
-                  Raw transcript — hard to use, hard to find later
+                  Data rich. Insight poor. Sound familiar?
                 </p>
               </div>
             </div>
@@ -115,60 +119,38 @@ export const HowItWorks = () => {
           {/* After */}
           <div className="saydo-card p-5 sm:p-6 border border-primary/30 bg-gradient-to-br from-card to-accent/20 relative">
             <div className="absolute -top-3 left-5 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-3 py-1 text-xs font-bold rounded-full flex items-center gap-2 shadow-sm">
-              <Brain size={12} />
-              <span className="hidden sm:inline">WITH SAYDO AI AGENT</span>
-              <span className="sm:hidden">SAYDO AI</span>
+              <Zap size={12} />
+              <span className="hidden sm:inline">WITH SAYDO</span>
+              <span className="sm:hidden">SAYDO</span>
             </div>
             <div className="space-y-3 text-sm pt-2">
               <div>
-                <h4 className="text-foreground font-semibold mb-2">Meeting Summary</h4>
+                <h4 className="text-foreground font-semibold mb-2">One Partner. Your Whole Life.</h4>
                 <p className="text-muted-foreground">
-                  Investor meeting discussed Q3 roadmap pivot and new market
-                  opportunities.
+                  Saydo connects your voice notes, lab results, and wearable data into one intelligent picture.
                 </p>
               </div>
               <div className="pt-3 border-t border-border">
                 <h4 className="text-foreground font-semibold mb-2 flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-primary" />
-                  Actions (Auto-Extracted)
+                  What You Actually Get
                 </h4>
                 <ul className="space-y-1.5 text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    Send updated pitch deck by Friday EOD
+                    Tasks scheduled around YOUR energy levels
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    Schedule technical deep-dive for next week
+                    Grocery lists built from YOUR lab results
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary">•</span>
+                    Nudges that know when to push and when to rest
                   </li>
                 </ul>
               </div>
             </div>
-          </div>
-        </motion.div>
-
-        {/* Agent vs Transcription Comparison */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="mb-20"
-        >
-          <div className="text-center mb-6">
-            <h3 className="text-2xl font-semibold text-foreground mb-2">Transcription vs AI Agent</h3>
-            <p className="text-muted-foreground text-sm">
-              See the difference between basic transcription and intelligent AI agent workflow
-            </p>
-          </div>
-          <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-secondary saydo-card">
-            <OptionalImage
-              src={getLandingImageUrl("agent-vs-transcription")}
-              alt="Transcription vs AI Agent Comparison"
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-            />
           </div>
         </motion.div>
 
@@ -183,8 +165,8 @@ export const HowItWorks = () => {
               transition={{ duration: 0.5, delay: index * 0.1 }}
               className="text-center relative"
             >
-              <div className="w-16 h-16 bg-accent border border-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-5 transition-all hover:shadow-md hover:border-primary/40">
-                <step.icon className="text-primary w-7 h-7" />
+              <div className={`w-16 h-16 ${step.bg} border border-border rounded-2xl flex items-center justify-center mx-auto mb-5 transition-all hover:shadow-md`}>
+                <step.icon className={`${step.color} w-7 h-7`} />
               </div>
               <h3 className="text-xl font-semibold text-foreground mb-2">{step.title}</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">{step.description}</p>

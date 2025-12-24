@@ -1,14 +1,61 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Mic, Sparkles, Check, ArrowRight, Square } from "lucide-react"
+import { Mic, FileText, Sparkles, Check, ArrowRight, Square, Heart, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 
+type DemoMode = "voice" | "scan"
+type DemoStep = "idle" | "active" | "processing" | "result"
+
+interface DemoResult {
+  mode: DemoMode
+  badge: string
+  title: string
+  items: { text: string; highlight?: string }[]
+  insight?: string
+}
+
+const demoResults: DemoResult[] = [
+  {
+    mode: "voice",
+    badge: "Voice Captured",
+    title: "Investor Meeting Summary",
+    items: [
+      { text: "Discussed Q3 roadmap pivot and new market opportunities" },
+      { highlight: "Action:", text: "Send updated pitch deck by Friday EOD" },
+      { highlight: "Follow-up:", text: "Schedule technical deep-dive next week" },
+    ],
+  },
+  {
+    mode: "scan",
+    badge: "Labs Analyzed",
+    title: "Your Energy Fix for Today",
+    items: [
+      { text: "Vitamin D levels are low — affecting your afternoon focus" },
+      { highlight: "Today:", text: "Take 2000 IU with breakfast for best absorption" },
+      { highlight: "This week:", text: "Added salmon & eggs to your grocery list" },
+    ],
+    insight: "Your 3 PM slump isn't laziness. It's biology. Now you know how to fix it.",
+  },
+  {
+    mode: "voice",
+    badge: "Thought Captured",
+    title: "Quick Idea → Action Plan",
+    items: [
+      { text: "New feature idea for the mobile app captured" },
+      { highlight: "Task:", text: "Draft wireframe by Wednesday" },
+      { highlight: "Note:", text: "Your HRV shows good focus — perfect time for creative work" },
+    ],
+  },
+]
+
 export const HeroDemo = () => {
-  const [step, setStep] = useState<"idle" | "recording" | "processing" | "result">("idle")
+  const [step, setStep] = useState<DemoStep>("idle")
+  const [currentResultIndex, setCurrentResultIndex] = useState(0)
   const [user, setUser] = useState(false)
+  const [activeMode, setActiveMode] = useState<DemoMode>("voice")
 
   useEffect(() => {
     const supabase = createClient()
@@ -17,35 +64,41 @@ export const HeroDemo = () => {
     })
   }, [])
 
-  const handleRecord = () => {
+  const startDemo = useCallback((mode: DemoMode) => {
     if (step === "idle") {
-      setStep("recording")
-      // Simulate recording duration
-      setTimeout(() => setStep("processing"), 3000)
+      setActiveMode(mode)
+      setStep("active")
+      // Find a result that matches the mode
+      const matchingIndex = demoResults.findIndex(r => r.mode === mode)
+      setCurrentResultIndex(matchingIndex >= 0 ? matchingIndex : 0)
+      setTimeout(() => setStep("processing"), 2500)
     }
-  }
+  }, [step])
 
-  // Simulate processing and result
   useEffect(() => {
     if (step === "processing") {
-      const timer = setTimeout(() => setStep("result"), 2000)
+      const timer = setTimeout(() => setStep("result"), 1800)
       return () => clearTimeout(timer)
     }
   }, [step])
 
+  const handleReset = () => {
+    setStep("idle")
+    // Cycle to next result for variety
+    setCurrentResultIndex((prev) => (prev + 1) % demoResults.length)
+  }
+
   const handleLogin = async () => {
     const supabase = createClient()
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback`,
       },
     })
-
-    if (error) {
-      console.error("Login error:", error)
-    }
   }
+
+  const currentResult = demoResults[currentResultIndex]
 
   return (
     <motion.div 
@@ -55,9 +108,9 @@ export const HeroDemo = () => {
       className="relative w-full max-w-3xl mx-auto mt-4"
     >
       {/* The Dynamic Card */}
-      <div className="saydo-card p-8 sm:p-10 min-h-[320px] flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="saydo-card p-8 sm:p-10 min-h-[360px] flex flex-col items-center justify-center relative overflow-hidden">
         <AnimatePresence mode="wait">
-          {/* STATE 1: IDLE - The Signature Record Button */}
+          {/* STATE 1: IDLE - Unified Input Area */}
           {step === "idle" && (
             <motion.div
               key="idle"
@@ -65,103 +118,160 @@ export const HeroDemo = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.4 }}
-              className="text-center"
+              className="text-center w-full"
             >
-              {/* The "Alive" Record Button */}
-              <div className="relative flex items-center justify-center">
-                {/* Outer breathing glow ring */}
-                <div className="absolute w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-primary/10 animate-saydo-breathe" />
-                
-                {/* Ping effect */}
-                <div className="absolute w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-primary/20 animate-saydo-ping" />
-                
-                <button
-                  onClick={handleRecord}
-                  className="relative group w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-300 touch-manipulation"
-                  aria-label="Start recording demo"
-                >
-                  <Mic className="text-white w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-110" />
-                  
-                  {/* Subtle inner highlight */}
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/15 pointer-events-none" />
-                </button>
+              {/* Dual Action Buttons */}
+              <div className="flex items-center justify-center gap-6 sm:gap-10">
+                {/* Voice Button */}
+                <div className="flex flex-col items-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-primary/10 animate-saydo-breathe" />
+                    <button
+                      onClick={() => startDemo("voice")}
+                      className="relative group w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-300 touch-manipulation"
+                      aria-label="Start voice demo"
+                    >
+                      <Mic className="text-white w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-110" />
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/15 pointer-events-none" />
+                    </button>
+                  </div>
+                  <span className="mt-3 text-sm text-muted-foreground font-medium">Speak</span>
+                </div>
+
+                {/* Divider */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-px h-10 bg-border" />
+                  <span className="text-xs text-muted-foreground/60 uppercase tracking-wider">or</span>
+                  <div className="w-px h-10 bg-border" />
+                </div>
+
+                {/* Scan Button */}
+                <div className="flex flex-col items-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-rose-500/10 animate-saydo-breathe animation-delay-500" />
+                    <button
+                      onClick={() => startDemo("scan")}
+                      className="relative group w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:scale-105 active:scale-95 transition-all duration-300 touch-manipulation"
+                      aria-label="Start scan demo"
+                    >
+                      <FileText className="text-white w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-110" />
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/15 pointer-events-none" />
+                    </button>
+                  </div>
+                  <span className="mt-3 text-sm text-muted-foreground font-medium">Scan</span>
+                </div>
               </div>
               
               <p className="mt-8 text-muted-foreground font-medium text-lg">
-                Tap to try
+                Tap to try Saydo
               </p>
               <p className="mt-2 text-muted-foreground/70 text-sm">
-                See how it works
+                Voice notes or lab results — Saydo handles it all
               </p>
             </motion.div>
           )}
 
-          {/* STATE 2: RECORDING - Warm Teal Recording State */}
-          {step === "recording" && (
+          {/* STATE 2: ACTIVE - Recording or Scanning */}
+          {step === "active" && (
             <motion.div
-              key="recording"
+              key="active"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="w-full"
             >
-              <div className="saydo-recording-card text-center">
-                {/* Timer */}
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-4xl font-semibold mb-4 tabular-nums"
-                >
-                  00:03
-                </motion.div>
-                
-                {/* Prompt text */}
-                <p className="text-white/90 font-medium mb-2">
-                  Not sure what to say?
-                </p>
-                <p className="text-white/70 text-sm mb-6">
-                  Try talking about your goals. Don&apos;t be afraid to ramble!
-                </p>
-                
-                {/* Waveform visualization */}
-                <div className="flex items-end justify-center gap-1 h-12 mb-6">
-                  {[...Array(20)].map((_, i) => (
+              <div className={`rounded-2xl p-6 sm:p-8 text-center ${
+                activeMode === "voice" 
+                  ? "bg-gradient-to-br from-primary to-primary/80" 
+                  : "bg-gradient-to-br from-rose-500 to-rose-600"
+              }`}>
+                {activeMode === "voice" ? (
+                  <>
                     <motion.div
-                      key={i}
-                      animate={{
-                        height: [
-                          Math.random() * 12 + 8,
-                          Math.random() * 28 + 20,
-                          Math.random() * 12 + 8,
-                        ],
-                      }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.4 + Math.random() * 0.3,
-                        delay: i * 0.03,
-                        ease: "easeInOut",
-                      }}
-                      className="w-1 bg-white/60 rounded-full min-h-[8px]"
-                    />
-                  ))}
-                </div>
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-3xl font-semibold text-white mb-3 tabular-nums"
+                    >
+                      00:03
+                    </motion.div>
+                    <p className="text-white/90 font-medium mb-2">Listening...</p>
+                    <p className="text-white/70 text-sm mb-5">
+                      Talk about anything — meetings, ideas, to-dos
+                    </p>
+                    
+                    {/* Waveform */}
+                    <div className="flex items-end justify-center gap-1 h-12 mb-5">
+                      {[...Array(20)].map((_, i) => (
+                        <motion.div
+                          key={i}
+                          animate={{
+                            height: [
+                              Math.random() * 12 + 8,
+                              Math.random() * 28 + 20,
+                              Math.random() * 12 + 8,
+                            ],
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 0.4 + Math.random() * 0.3,
+                            delay: i * 0.03,
+                            ease: "easeInOut",
+                          }}
+                          className="w-1 bg-white/60 rounded-full min-h-[8px]"
+                        />
+                      ))}
+                    </div>
+                    
+                    <div className="bg-white/10 rounded-xl p-4 mb-5 text-left">
+                      <p className="text-white/90 text-sm italic">
+                        &ldquo;Summarize my meeting with the investors...&rdquo;
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                      <motion.div
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                      >
+                        <Heart className="w-8 h-8 text-white" />
+                      </motion.div>
+                    </div>
+                    <p className="text-white/90 font-medium mb-2">Scanning your labs...</p>
+                    <p className="text-white/70 text-sm mb-5">
+                      Analyzing biomarkers & health patterns
+                    </p>
+                    
+                    {/* Scanning animation */}
+                    <div className="relative h-16 mb-5 flex items-center justify-center">
+                      <motion.div
+                        className="absolute w-full h-1 bg-white/30 rounded-full"
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: 1 }}
+                        transition={{ duration: 2, ease: "easeInOut" }}
+                      />
+                      <motion.div
+                        className="absolute w-3 h-3 bg-white rounded-full shadow-lg"
+                        animate={{ x: [-100, 100] }}
+                        transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }}
+                      />
+                    </div>
+                    
+                    <div className="bg-white/10 rounded-xl p-4 mb-5 text-left">
+                      <p className="text-white/90 text-sm">
+                        Detecting: Vitamin D, Iron, Cortisol, HbA1c...
+                      </p>
+                    </div>
+                  </>
+                )}
                 
-                {/* Simulated transcript */}
-                <div className="bg-white/10 rounded-xl p-4 mb-6 text-left">
-                  <p className="text-white/90 text-sm italic">
-                    &ldquo;Summarize my meeting with the investors...&rdquo;
-                  </p>
-                </div>
-                
-                {/* Stop button */}
-                <div className="flex justify-center">
-                  <button 
-                    className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all border-4 border-white/40"
-                    aria-label="Stop recording"
-                  >
-                    <Square className="w-5 h-5 text-white fill-white" />
-                  </button>
-                </div>
+                <button 
+                  className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all border-2 border-white/40 mx-auto"
+                  aria-label="Stop"
+                >
+                  <Square className="w-4 h-4 text-white fill-white" />
+                </button>
               </div>
             </motion.div>
           )}
@@ -179,22 +289,26 @@ export const HeroDemo = () => {
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
-                  className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full"
+                  className={`w-16 h-16 border-4 rounded-full ${
+                    activeMode === "voice"
+                      ? "border-primary/20 border-t-primary"
+                      : "border-rose-500/20 border-t-rose-500"
+                  }`}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-primary" />
+                  <Sparkles className={`w-6 h-6 ${activeMode === "voice" ? "text-primary" : "text-rose-500"}`} />
                 </div>
               </div>
               <p className="text-foreground text-lg font-medium mt-6">
-                Processing your voice...
+                Saydo is thinking...
               </p>
               <p className="text-muted-foreground text-sm mt-2">
-                Extracting actions and insights
+                Connecting the dots across your life
               </p>
             </motion.div>
           )}
 
-          {/* STATE 4: RESULT - The Payoff */}
+          {/* STATE 4: RESULT */}
           {step === "result" && (
             <motion.div
               key="result"
@@ -204,48 +318,59 @@ export const HeroDemo = () => {
               className="w-full text-left"
             >
               {/* Success badge */}
-              <div className="flex items-center gap-2 mb-5 text-primary">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Sparkles size={14} />
+              <div className={`flex items-center gap-2 mb-5 ${
+                currentResult.mode === "voice" ? "text-primary" : "text-rose-500"
+              }`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  currentResult.mode === "voice" ? "bg-primary/10" : "bg-rose-500/10"
+                }`}>
+                  {currentResult.mode === "voice" ? <Sparkles size={14} /> : <Zap size={14} />}
                 </div>
                 <span className="text-xs uppercase font-bold tracking-wider">
-                  Processed by Saydo
+                  {currentResult.badge}
                 </span>
               </div>
               
-              {/* Summary */}
+              {/* Title */}
               <h3 className="saydo-headline text-xl sm:text-2xl text-foreground mb-4">
-                Investor Meeting Summary
+                {currentResult.title}
               </h3>
               
-              <ul className="space-y-3 text-muted-foreground mb-8">
-                <li className="flex gap-3 items-start">
-                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check size={12} className="text-primary" />
-                  </div>
-                  <span>Discussed Q3 roadmap pivot and new market opportunities</span>
-                </li>
-                <li className="flex gap-3 items-start">
-                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check size={12} className="text-primary" />
-                  </div>
-                  <span><strong className="text-foreground">Action:</strong> Send updated pitch deck by Friday EOD</span>
-                </li>
-                <li className="flex gap-3 items-start">
-                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check size={12} className="text-primary" />
-                  </div>
-                  <span><strong className="text-foreground">Follow-up:</strong> Schedule technical deep-dive next week</span>
-                </li>
+              {/* Items */}
+              <ul className="space-y-3 text-muted-foreground mb-4">
+                {currentResult.items.map((item, i) => (
+                  <li key={i} className="flex gap-3 items-start">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      currentResult.mode === "voice" ? "bg-primary/10" : "bg-rose-500/10"
+                    }`}>
+                      <Check size={12} className={currentResult.mode === "voice" ? "text-primary" : "text-rose-500"} />
+                    </div>
+                    <span>
+                      {item.highlight && (
+                        <strong className="text-foreground">{item.highlight} </strong>
+                      )}
+                      {item.text}
+                    </span>
+                  </li>
+                ))}
               </ul>
 
-              <div className="flex flex-col sm:flex-row gap-3">
+              {/* Insight callout for health results */}
+              {currentResult.insight && (
+                <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl p-4 mb-6">
+                  <p className="text-rose-700 dark:text-rose-300 text-sm italic">
+                    {currentResult.insight}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 {!user ? (
                   <Button
                     onClick={handleLogin}
                     className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-full h-12 shadow-md hover:shadow-lg transition-all"
                   >
-                    Connect Google to Save
+                    Get Started Free
                     <ArrowRight size={16} className="ml-2" />
                   </Button>
                 ) : (
@@ -258,7 +383,7 @@ export const HeroDemo = () => {
                 )}
                 <Button
                   variant="ghost"
-                  onClick={() => setStep("idle")}
+                  onClick={handleReset}
                   className="text-muted-foreground hover:text-foreground hover:bg-secondary font-medium rounded-full h-12"
                 >
                   Try Again
@@ -269,7 +394,7 @@ export const HeroDemo = () => {
         </AnimatePresence>
       </div>
       
-      {/* Decorative elements */}
+      {/* Decorative gradient */}
       <div className="absolute -z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-radial from-primary/5 via-transparent to-transparent pointer-events-none" />
     </motion.div>
   )

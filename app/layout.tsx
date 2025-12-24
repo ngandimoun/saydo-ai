@@ -30,8 +30,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Saydo - Turn messy thoughts into clear action",
-  description: "Saydo is a voice-first AI companion that turns what you say into real work. Speak naturally and get professional summaries, tasks, reminders, and emails automatically.",
+  title: "Saydo - The first AI that knows your mind and your body",
+  description: "Voice notes become tasks. Lab results become daily guides. Saydo is the first AI that understands your whole life - work and wellness together.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -39,6 +39,16 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
 
@@ -54,6 +64,9 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
       </head>
       <body
         className={`${dmSans.variable} ${playfair.variable} ${geistMono.variable} antialiased font-sans`}

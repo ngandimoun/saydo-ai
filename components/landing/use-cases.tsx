@@ -1,27 +1,16 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Stethoscope, Briefcase, Users, Lightbulb, FileText, UserCheck } from "lucide-react"
+import { Rocket, Stethoscope, Users, Dna, Baby, Brain } from "lucide-react"
 import { OptionalImage } from "@/components/ui/optional-image"
 import { getLandingImageUrl } from "@/lib/landing-images"
 
 const useCases = [
   {
-    icon: Stethoscope,
-    title: "Healthcare Workers",
-    description: "Nurses and doctors capture patient notes, treatment plans, and follow-ups on the go.",
-    example: "Quick voice note after patient visit → AI agent creates organized care plan with reminders",
-    gradient: "from-rose-50 to-orange-50",
-    iconBg: "bg-rose-100",
-    iconColor: "text-rose-600",
-    borderColor: "border-rose-200/60",
-    imageKey: "use-case-healthcare" as const,
-  },
-  {
-    icon: Briefcase,
-    title: "Founders & Managers",
-    description: "Turn scattered thoughts into actionable plans, meeting notes, and team updates.",
-    example: "Rambling strategy session → AI agent extracts clear action items and next steps",
+    icon: Rocket,
+    title: "The Founder",
+    tagline: "Capture ideas. Protect energy.",
+    description: "Investor meeting notes become action items instantly. But Saydo also knows when you're redlining — and blocks time for recovery before burnout hits.",
     gradient: "from-amber-50 to-yellow-50",
     iconBg: "bg-amber-100",
     iconColor: "text-amber-600",
@@ -29,10 +18,21 @@ const useCases = [
     imageKey: "use-case-founder" as const,
   },
   {
+    icon: Stethoscope,
+    title: "The Healthcare Worker",
+    tagline: "Document care. Track recovery.",
+    description: "Patient notes captured hands-free between rooms. Saydo also tracks YOUR recovery between shifts — because you can't pour from an empty cup.",
+    gradient: "from-rose-50 to-orange-50",
+    iconBg: "bg-rose-100",
+    iconColor: "text-rose-600",
+    borderColor: "border-rose-200/60",
+    imageKey: "use-case-healthcare" as const,
+  },
+  {
     icon: Users,
-    title: "Caregivers",
-    description: "Document care activities, medication schedules, and important observations.",
-    example: "Daily care updates → AI agent structures care log with reminders",
+    title: "The Caregiver",
+    tagline: "Manage others. Don't forget yourself.",
+    description: "Care logs, medication reminders, doctor's notes — all organized. Saydo also watches YOUR stress markers and reminds you to refill your own tank.",
     gradient: "from-sky-50 to-cyan-50",
     iconBg: "bg-sky-100",
     iconColor: "text-sky-600",
@@ -40,10 +40,10 @@ const useCases = [
     imageKey: "use-case-caregiver" as const,
   },
   {
-    icon: Lightbulb,
-    title: "Writers & Creators",
-    description: "Capture ideas, plot points, and creative thoughts before they slip away.",
-    example: "Stream of consciousness → AI agent organizes notes and writing prompts",
+    icon: Dna,
+    title: "The Biohacker",
+    tagline: "Track biological age. Win daily.",
+    description: "Labs, wearables, supplements — all in one place. Saydo correlates your sleep, HRV, and bloodwork to show what's actually moving the needle.",
     gradient: "from-violet-50 to-purple-50",
     iconBg: "bg-violet-100",
     iconColor: "text-violet-600",
@@ -51,10 +51,10 @@ const useCases = [
     imageKey: "use-case-writer" as const,
   },
   {
-    icon: UserCheck,
-    title: "Technicians",
-    description: "Document repairs, maintenance notes, and technical observations hands-free.",
-    example: "Field service notes → AI agent creates professional service reports",
+    icon: Baby,
+    title: "The Busy Parent",
+    tagline: "Family chaos. Personal clarity.",
+    description: "School pickups, meal planning, doctor visits — captured by voice. Saydo also builds grocery lists around everyone's needs, including yours.",
     gradient: "from-emerald-50 to-teal-50",
     iconBg: "bg-emerald-100",
     iconColor: "text-emerald-600",
@@ -62,10 +62,10 @@ const useCases = [
     imageKey: "use-case-technician" as const,
   },
   {
-    icon: FileText,
+    icon: Brain,
     title: "Anyone Overwhelmed",
-    description: "When your brain moves faster than your fingers, Saydo's AI agent keeps up.",
-    example: "Mental dump → AI agent creates clear priorities and organized thoughts",
+    tagline: "When life moves faster than you can type.",
+    description: "Your brain dumps become organized plans. Your fatigue becomes understood. Saydo turns chaos into clarity — because you deserve both productivity AND peace.",
     gradient: "from-slate-50 to-gray-50",
     iconBg: "bg-slate-100",
     iconColor: "text-slate-600",
@@ -88,10 +88,10 @@ export const UseCases = () => {
         >
           <h2 className="saydo-headline text-3xl sm:text-4xl md:text-5xl text-foreground mb-5">
             Built for People Who{" "}
-            <span className="saydo-headline-italic text-primary">Move Fast</span>
+            <span className="saydo-headline-italic text-primary">Live Full Lives</span>
           </h2>
           <p className="saydo-body text-muted-foreground text-lg max-w-2xl mx-auto">
-            Saydo is perfect for anyone who thinks faster than they type
+            Saydo is for anyone who refuses to choose between ambition and wellbeing
           </p>
         </motion.div>
 
@@ -110,7 +110,7 @@ export const UseCases = () => {
                 <div className="relative w-full aspect-video mb-4 rounded-xl overflow-hidden bg-white/50 dark:bg-card/50">
                   <OptionalImage
                     src={getLandingImageUrl(useCase.imageKey)}
-                    alt={`${useCase.title} - AI Agent Workflow`}
+                    alt={`${useCase.title} using Saydo`}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                     sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -122,17 +122,15 @@ export const UseCases = () => {
                   <useCase.icon className={`${useCase.iconColor} dark:text-primary w-6 h-6`} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-foreground dark:text-foreground font-semibold text-lg mb-2">
+                  <h3 className="text-foreground dark:text-foreground font-semibold text-lg mb-1">
                     {useCase.title}
                   </h3>
-                  <p className="text-muted-foreground dark:text-foreground/90 text-sm mb-3 leading-relaxed">
+                  <p className="text-primary dark:text-primary/80 text-sm font-medium mb-2">
+                    {useCase.tagline}
+                  </p>
+                  <p className="text-muted-foreground dark:text-foreground/80 text-sm leading-relaxed">
                     {useCase.description}
                   </p>
-                  <div className="bg-white/60 dark:bg-card/80 dark:border-primary/30 backdrop-blur-sm rounded-lg p-3 border border-white/80">
-                    <p className="text-muted-foreground dark:text-foreground/95 text-xs italic">
-                      &ldquo;{useCase.example}&rdquo;
-                    </p>
-                  </div>
                 </div>
               </div>
             </motion.div>
