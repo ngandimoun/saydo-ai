@@ -13,3 +13,6 @@ console.log("NEXT_PUBLIC_SUPABASE_ANON_KEY:", process.env.NEXT_PUBLIC_SUPABASE_A
 console.log("\nCurrent directory:", process.cwd())
 
 
+
+
+

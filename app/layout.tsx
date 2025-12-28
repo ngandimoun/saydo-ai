@@ -1,24 +1,40 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Playfair_Display, Geist_Mono } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans, Playfair_Display, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { GSAPProvider } from "@/lib/gsap-provider";
+import { LocationUpdaterProvider } from "@/components/location-updater-provider";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
+// Display font - Modern, friendly headlines
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
+// Body font - Warm, approachable text
+const jakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+// Accent font for special headlines
 const playfair = Playfair_Display({
   variable: "--font-playfair",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
+  display: "swap",
 });
 
+// Mono font for data/code
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
@@ -69,7 +85,7 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
       </head>
       <body
-        className={`${dmSans.variable} ${playfair.variable} ${geistMono.variable} antialiased font-sans`}
+        className={`${outfit.variable} ${jakartaSans.variable} ${playfair.variable} ${geistMono.variable} antialiased font-body`}
       >
         <ThemeProvider
           attribute="class"
@@ -77,7 +93,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <GSAPProvider>
+            <LocationUpdaterProvider>
+              {children}
+            </LocationUpdaterProvider>
+          </GSAPProvider>
         </ThemeProvider>
       </body>
     </html>

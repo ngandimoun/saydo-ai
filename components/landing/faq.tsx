@@ -1,9 +1,17 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { useState } from "react"
-import { ChevronDown } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { ChevronDown, Sparkles } from "lucide-react"
+import { gsap } from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { cn } from "@/lib/utils"
+import { prefersReducedMotion, durations } from "@/lib/animation-config"
+
+// Register ScrollTrigger
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 const faqs = [
   {
@@ -58,13 +66,47 @@ const faqs = [
 
 export const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const faqsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return
+
+    const ctx = gsap.context(() => {
+      if (faqsRef.current) {
+        const items = faqsRef.current.querySelectorAll(".faq-item")
+
+        gsap.fromTo(
+          items,
+          {
+            y: 20,
+            opacity: 0,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            duration: durations.normal,
+            stagger: 0.05,
+            ease: "power2.out",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: faqsRef.current,
+              start: "top 85%",
+            },
+          }
+        )
+      }
+    }, sectionRef)
+
+    return () => ctx.revert()
+  }, [])
 
   const toggleQuestion = (index: number) => {
     setOpenIndex(openIndex === index ? null : index)
   }
 
   return (
-    <section className="w-full py-20 sm:py-28 px-4 bg-gradient-to-b from-secondary to-background">
+    <section ref={sectionRef} className="w-full py-20 sm:py-28 px-4 bg-gradient-to-b from-secondary to-background overflow-hidden">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <motion.div
@@ -74,6 +116,14 @@ export const FAQ = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-14"
         >
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            >
+              <Sparkles className="w-6 h-6 text-primary" />
+            </motion.div>
+          </div>
           <h2 className="saydo-headline text-3xl sm:text-4xl md:text-5xl text-foreground mb-4">
             Common Questions
           </h2>
@@ -83,24 +133,21 @@ export const FAQ = () => {
         </motion.div>
 
         {/* FAQ Items */}
-        <div className="space-y-3">
+        <div ref={faqsRef} className="space-y-3">
           {faqs.map((faq, index) => (
             <motion.div
               key={index}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: index * 0.03 }}
               className={cn(
-                "saydo-card border overflow-hidden transition-all duration-300",
+                "faq-item saydo-card border overflow-hidden transition-all duration-300",
                 openIndex === index 
                   ? "border-primary/30 bg-card shadow-md" 
                   : "border-border bg-card/80 hover:bg-card hover:shadow-sm"
               )}
             >
-              <button
+              <motion.button
                 onClick={() => toggleQuestion(index)}
                 className="w-full px-5 sm:px-6 py-5 text-left flex items-center justify-between gap-4 transition-colors"
+                whileHover={{ backgroundColor: "rgba(13, 148, 136, 0.02)" }}
               >
                 <h3 className={cn(
                   "text-base sm:text-lg font-medium pr-4 transition-colors",
@@ -108,40 +155,83 @@ export const FAQ = () => {
                 )}>
                   {faq.question}
                 </h3>
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
-                  openIndex === index 
-                    ? "bg-primary/10 rotate-180" 
-                    : "bg-secondary"
-                )}>
+                <motion.div
+                  animate={{ rotate: openIndex === index ? 180 : 0 }}
+                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors",
+                    openIndex === index 
+                      ? "bg-primary/10" 
+                      : "bg-secondary"
+                  )}
+                >
                   <ChevronDown
                     className={cn(
                       "w-4 h-4 transition-colors",
                       openIndex === index ? "text-primary" : "text-muted-foreground"
                     )}
                   />
-                </div>
-              </button>
-              <AnimatePresence>
+                </motion.div>
+              </motion.button>
+              
+              <AnimatePresence initial={false}>
                 {openIndex === index && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                    animate={{ 
+                      height: "auto", 
+                      opacity: 1,
+                      transition: {
+                        height: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+                        opacity: { duration: 0.2, delay: 0.1 }
+                      }
+                    }}
+                    exit={{ 
+                      height: 0, 
+                      opacity: 0,
+                      transition: {
+                        height: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+                        opacity: { duration: 0.1 }
+                      }
+                    }}
                     className="overflow-hidden"
                   >
-                    <div className="px-5 sm:px-6 pb-5 pt-0">
+                    <motion.div
+                      initial={{ y: -10 }}
+                      animate={{ y: 0 }}
+                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      className="px-5 sm:px-6 pb-5 pt-0"
+                    >
                       <p className="text-muted-foreground leading-relaxed text-sm sm:text-base">
                         {faq.answer}
                       </p>
-                    </div>
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </motion.div>
           ))}
         </div>
+
+        {/* Still have questions? */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+          className="text-center mt-12"
+        >
+          <p className="text-muted-foreground text-sm">
+            Still have questions?{" "}
+            <motion.a
+              href="mailto:contact@saydo.app"
+              whileHover={{ scale: 1.05 }}
+              className="text-primary hover:underline font-medium"
+            >
+              Reach out to us
+            </motion.a>
+          </p>
+        </motion.div>
       </div>
     </section>
   )

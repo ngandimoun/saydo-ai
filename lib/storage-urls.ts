@@ -19,3 +19,6 @@ export function getImagePublicUrl(filePath: string): string {
   return `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
 }
 
+
+
+

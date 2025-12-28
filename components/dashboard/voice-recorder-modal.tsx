@@ -2,32 +2,23 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Mic, Square, Pause, Play, Send, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { X, Mic, Square, Pause, Play, Send, Trash2, Sparkles } from "lucide-react"
 import { formatDuration } from "@/lib/dashboard/time-utils"
 import { cn } from "@/lib/utils"
+import { springs } from "@/lib/motion-system"
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { logger } from "@/lib/logger"
 
 /**
- * Voice Recorder Modal
+ * Voice Recorder Modal - Airbnb-Inspired
  * 
- * Full-screen modal for voice recording.
- * Features:
- * - Max 6 minutes recording time
- * - Visual waveform animation
- * - Timer display
- * - Pause/resume support
- * - Cancel and send actions
+ * Immersive full-screen recording experience with:
+ * - Dynamic waveform visualization
+ * - Gradient ambient backgrounds
+ * - Real-time transcription preview
+ * - Processing state with particle effects
  * 
- * TODO (Backend Integration):
- * - Use MediaRecorder API to capture audio
- * - Upload to Supabase Storage
- * - Send to AI for transcription and processing
- * - Link recordings contextually (context_chain_id)
- * 
- * TODO (AI Integration):
- * - Real-time transcription display
- * - Show AI processing status
- * - Extract tasks/reminders from transcription
+ * Now integrated with real voice recording infrastructure
  */
 
 interface VoiceRecorderModalProps {
@@ -47,108 +38,100 @@ export function VoiceRecorderModal({
   onRecordingEnd,
   maxDuration = 360 
 }: VoiceRecorderModalProps) {
-  const [state, setState] = useState<RecordingState>('idle')
-  const [duration, setDuration] = useState(0)
   const [waveformData, setWaveformData] = useState<number[]>(
-    Array(30).fill(0).map(() => Math.random() * 0.3)
+    Array(40).fill(0).map(() => Math.random() * 0.2 + 0.1)
   )
+  const [transcription, setTranscription] = useState<string>("")
+
+  // Use real voice recorder hook
+  const {
+    isRecording,
+    duration,
+    isProcessing,
+    error: recorderError,
+    startRecording,
+    stopRecording,
+  } = useVoiceRecorder({
+    maxDuration,
+    onRecordingComplete: (result) => {
+      logger.info('Voice recording completed', { result })
+      onRecordingEnd?.()
+      onClose()
+    },
+    onError: (error) => {
+      logger.error('Voice recording error', { error })
+    },
+  })
+
+  // Determine state from recorder
+  const state: RecordingState = isProcessing 
+    ? 'processing' 
+    : isRecording 
+    ? 'recording' 
+    : 'idle'
 
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setState('idle')
-      setDuration(0)
+      setTranscription("")
+      setWaveformData(Array(40).fill(0).map(() => Math.random() * 0.2 + 0.1))
     }
   }, [isOpen])
 
-  // Timer logic
+  // Smooth waveform animation when recording
   useEffect(() => {
-    let interval: NodeJS.Timeout
+    if (state !== 'recording') return
+    
+    const waveInterval = setInterval(() => {
+      setWaveformData(prev => prev.map(() => 
+        0.15 + Math.random() * 0.85
+      ))
+    }, 100)
 
-    if (state === 'recording' && duration < maxDuration) {
-      interval = setInterval(() => {
-        setDuration(prev => {
-          if (prev >= maxDuration - 1) {
-            setState('paused')
-            return maxDuration
-          }
-          return prev + 1
-        })
-        // Simulate waveform
-        setWaveformData(Array(30).fill(0).map(() => 
-          0.2 + Math.random() * 0.8
-        ))
-      }, 1000)
+    return () => clearInterval(waveInterval)
+  }, [state])
+
+  // Show error if recording failed
+  useEffect(() => {
+    if (recorderError) {
+      logger.error('Recording error', { error: recorderError })
+      // Could show a toast notification here
     }
-
-    return () => clearInterval(interval)
-  }, [state, duration, maxDuration])
+  }, [recorderError])
 
   // Start recording
-  const startRecording = useCallback(() => {
-    /**
-     * TODO (Web Audio API):
-     * 
-     * const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-     * const mediaRecorder = new MediaRecorder(stream)
-     * const chunks: Blob[] = []
-     * 
-     * mediaRecorder.ondataavailable = (e) => chunks.push(e.data)
-     * mediaRecorder.onstop = () => {
-     *   const blob = new Blob(chunks, { type: 'audio/webm' })
-     *   // Upload to Supabase Storage
-     * }
-     * 
-     * mediaRecorder.start()
-     */
-    setState('recording')
-    onRecordingStart?.()
-  }, [onRecordingStart])
-
-  // Pause recording
-  const pauseRecording = useCallback(() => {
-    setState('paused')
-    // Flatten waveform
-    setWaveformData(Array(30).fill(0).map(() => 0.1))
-  }, [])
-
-  // Resume recording
-  const resumeRecording = useCallback(() => {
-    setState('recording')
-  }, [])
+  const handleStartRecording = useCallback(async () => {
+    try {
+      await startRecording()
+      onRecordingStart?.()
+    } catch (error) {
+      logger.error('Failed to start recording', { error })
+    }
+  }, [startRecording, onRecordingStart])
 
   // Stop and send
-  const sendRecording = useCallback(() => {
-    setState('processing')
-    
-    /**
-     * TODO (Backend):
-     * 1. Stop MediaRecorder
-     * 2. Upload blob to Supabase Storage
-     * 3. Create record in voice_recordings table
-     * 4. Trigger AI processing (transcription, extraction)
-     * 5. Close modal and show toast
-     */
-    
-    // Simulate processing
-    setTimeout(() => {
-      onRecordingEnd?.()
-      onClose()
-      setState('idle')
-      setDuration(0)
-    }, 2000)
-  }, [onClose, onRecordingEnd])
+  const sendRecording = useCallback(async () => {
+    try {
+      await stopRecording()
+      // onRecordingEnd is called by the hook's onRecordingComplete
+    } catch (error) {
+      logger.error('Failed to stop recording', { error })
+    }
+  }, [stopRecording])
 
   // Cancel recording
   const cancelRecording = useCallback(() => {
-    setState('idle')
-    setDuration(0)
-    onRecordingEnd?.()
+    if (isRecording) {
+      stopRecording().catch((error) => {
+        logger.error('Failed to cancel recording', { error })
+      })
+    }
     onClose()
-  }, [onClose, onRecordingEnd])
+  }, [isRecording, stopRecording, onClose])
 
   // Calculate progress percentage
   const progress = (duration / maxDuration) * 100
+  const isNearLimit = progress > 80
 
   return (
     <AnimatePresence>
@@ -157,29 +140,62 @@ export function VoiceRecorderModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-background"
+          transition={{ duration: 0.3 }}
+          className="fixed inset-0 z-50"
         >
-          {/* Gradient Background */}
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
+          {/* Animated Gradient Background */}
+          <motion.div 
+            className="absolute inset-0"
+            animate={{
+              background: state === 'recording' 
+                ? [
+                    'linear-gradient(180deg, rgba(13, 148, 136, 0.15) 0%, #0C1222 50%, #0C1222 100%)',
+                    'linear-gradient(180deg, rgba(20, 184, 166, 0.2) 0%, #0C1222 50%, #0C1222 100%)',
+                    'linear-gradient(180deg, rgba(13, 148, 136, 0.15) 0%, #0C1222 50%, #0C1222 100%)',
+                  ]
+                : 'linear-gradient(180deg, rgba(13, 148, 136, 0.08) 0%, #0C1222 50%, #0C1222 100%)'
+            }}
+            transition={{ duration: 3, repeat: state === 'recording' ? Infinity : 0 }}
+          />
+
+          {/* Ambient orbs */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div 
+              className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/10 blur-3xl"
+              animate={state === 'recording' ? {
+                scale: [1, 1.2, 1],
+                opacity: [0.3, 0.5, 0.3],
+              } : {}}
+              transition={{ duration: 3, repeat: Infinity }}
+            />
+            <motion.div 
+              className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-teal-500/10 blur-3xl"
+              animate={state === 'recording' ? {
+                scale: [1.2, 1, 1.2],
+                opacity: [0.2, 0.4, 0.2],
+              } : {}}
+              transition={{ duration: 4, repeat: Infinity }}
+            />
+          </div>
 
           {/* Content */}
           <div className="relative h-full flex flex-col items-center justify-between py-8 px-6 max-w-lg mx-auto">
             {/* Header */}
             <div className="w-full flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="icon"
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={cancelRecording}
-                className="rounded-full"
+                className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-colors"
               >
-                <X size={24} />
-              </Button>
+                <X size={20} />
+              </motion.button>
               
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-white/60 font-medium">
                 Max {Math.floor(maxDuration / 60)} minutes
               </span>
               
-              <div className="w-10" /> {/* Spacer */}
+              <div className="w-10" />
             </div>
 
             {/* Main Content */}
@@ -187,50 +203,60 @@ export function VoiceRecorderModal({
               {/* Timer */}
               <motion.div
                 key={duration}
-                initial={{ scale: 1.1 }}
-                animate={{ scale: 1 }}
-                className="text-6xl sm:text-7xl font-light tabular-nums mb-8"
+                initial={{ scale: 1.05, opacity: 0.8 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className={cn(
+                  "text-7xl sm:text-8xl font-display font-light tabular-nums mb-6",
+                  isNearLimit ? "text-amber-400" : "text-white"
+                )}
               >
                 {formatDuration(duration)}
               </motion.div>
 
               {/* Waveform Visualization */}
-              <div className="flex items-center justify-center gap-1 h-24 mb-8 w-full max-w-xs">
+              <div className="flex items-center justify-center gap-0.5 h-28 mb-6 w-full max-w-sm">
                 {waveformData.map((height, i) => (
                   <motion.div
                     key={i}
                     animate={{
-                      height: state === 'recording' 
-                        ? `${height * 100}%` 
-                        : `${10 + Math.random() * 10}%`
+                      height: `${height * 100}%`,
+                      opacity: state === 'recording' ? 0.8 + height * 0.2 : 0.3,
                     }}
                     transition={{
-                      duration: 0.1,
+                      duration: state === 'recording' ? 0.08 : 0.3,
                       ease: "easeOut"
                     }}
                     className={cn(
-                      "w-1.5 rounded-full",
-                      state === 'recording' ? "bg-primary" : "bg-muted-foreground/30"
+                      "w-1 rounded-full",
+                      state === 'recording' 
+                        ? "bg-gradient-to-t from-primary to-teal-400" 
+                        : "bg-white/20"
                     )}
-                    style={{ minHeight: '8px' }}
+                    style={{ minHeight: '4px' }}
                   />
                 ))}
               </div>
 
               {/* Progress Bar */}
-              <div className="w-full max-w-xs h-1 bg-muted rounded-full overflow-hidden mb-4">
+              <div className="w-full max-w-sm h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
                 <motion.div
                   className={cn(
                     "h-full rounded-full",
-                    progress > 80 ? "bg-amber-500" : "bg-primary"
+                    isNearLimit 
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500" 
+                      : "bg-gradient-to-r from-primary to-teal-400"
                   )}
                   initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.3 }}
                 />
               </div>
 
               {/* Time remaining */}
-              <p className="text-sm text-muted-foreground">
+              <p className={cn(
+                "text-sm font-medium",
+                isNearLimit ? "text-amber-400" : "text-white/50"
+              )}>
                 {formatDuration(maxDuration - duration)} remaining
               </p>
 
@@ -239,7 +265,7 @@ export function VoiceRecorderModal({
                 key={state}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-muted-foreground text-center mt-8"
+                className="text-white/60 text-center mt-6 mb-4"
               >
                 {state === 'idle' && "Tap the button to start recording"}
                 {state === 'recording' && "Listening... speak naturally"}
@@ -248,14 +274,26 @@ export function VoiceRecorderModal({
               </motion.p>
 
               {/* Real-time Transcription Preview */}
-              {/* 
-                TODO (AI): Show real-time transcription
-                <div className="mt-6 p-4 bg-card rounded-xl max-w-xs">
-                  <p className="text-sm text-muted-foreground italic">
-                    "So first, I've got that product review meeting on Thursday at 10..."
-                  </p>
-                </div>
-              */}
+              <AnimatePresence>
+                {transcription && state !== 'processing' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -10, height: 0 }}
+                    className="w-full max-w-sm"
+                  >
+                    <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={12} className="text-primary" />
+                        <span className="text-xs font-medium text-white/50">Live Transcription</span>
+                      </div>
+                      <p className="text-sm text-white/80 italic leading-relaxed">
+                        "{transcription}"
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Controls */}
@@ -267,12 +305,15 @@ export function VoiceRecorderModal({
                   className="flex justify-center"
                 >
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
+                    whileHover={{ scale: 1.08 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={startRecording}
-                    className="w-20 h-20 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30"
+                    transition={springs.bouncy}
+                    onClick={handleStartRecording}
+                    className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-teal-600 flex items-center justify-center shadow-2xl shadow-primary/40 relative"
                   >
-                    <Mic size={32} className="text-primary-foreground" />
+                    {/* Inner glow */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 to-transparent" />
+                    <Mic size={36} className="text-white relative z-10" />
                   </motion.button>
                 </motion.div>
               )}
@@ -281,53 +322,48 @@ export function VoiceRecorderModal({
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-center gap-6"
+                  className="flex items-center justify-center gap-8"
                 >
                   {/* Delete */}
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
+                    transition={springs.snappy}
                     onClick={cancelRecording}
-                    className="w-14 h-14 rounded-full bg-muted flex items-center justify-center"
+                    className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10"
                   >
-                    <Trash2 size={22} className="text-muted-foreground" />
+                    <Trash2 size={22} className="text-white/70" />
                   </motion.button>
 
-                  {/* Pause/Resume */}
+                  {/* Stop button (recording can't be paused, only stopped) */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={state === 'recording' ? pauseRecording : resumeRecording}
-                    className={cn(
-                      "w-20 h-20 rounded-full flex items-center justify-center shadow-lg",
-                      state === 'recording' 
-                        ? "bg-primary shadow-primary/30" 
-                        : "bg-amber-500 shadow-amber-500/30"
-                    )}
+                    transition={springs.bouncy}
+                    onClick={sendRecording}
+                    className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-teal-600 flex items-center justify-center shadow-xl shadow-primary/30 relative"
                   >
-                    {state === 'recording' ? (
-                      <Pause size={32} className="text-white" />
-                    ) : (
-                      <Play size={32} className="text-white ml-1" />
-                    )}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/20 to-transparent" />
+                    <Square size={24} className="text-white relative z-10" />
                   </motion.button>
 
                   {/* Send */}
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
+                    transition={springs.snappy}
                     onClick={sendRecording}
                     disabled={duration === 0}
                     className={cn(
-                      "w-14 h-14 rounded-full flex items-center justify-center",
+                      "w-14 h-14 rounded-full flex items-center justify-center border",
                       duration > 0 
-                        ? "bg-green-500" 
-                        : "bg-muted"
+                        ? "bg-emerald-500 border-emerald-400 shadow-lg shadow-emerald-500/30" 
+                        : "bg-white/10 border-white/10"
                     )}
                   >
                     <Send 
                       size={22} 
-                      className={duration > 0 ? "text-white" : "text-muted-foreground"} 
+                      className={duration > 0 ? "text-white" : "text-white/30"} 
                     />
                   </motion.button>
                 </motion.div>
@@ -339,8 +375,20 @@ export function VoiceRecorderModal({
                   animate={{ opacity: 1 }}
                   className="flex flex-col items-center gap-4"
                 >
-                  <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                  <p className="text-muted-foreground">Saydo is thinking...</p>
+                  {/* Processing animation */}
+                  <div className="relative">
+                    <motion.div
+                      className="w-20 h-20 rounded-full border-4 border-primary/20"
+                      style={{ borderTopColor: 'var(--primary)' }}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Sparkles size={24} className="text-primary" />
+                    </div>
+                  </div>
+                  <p className="text-white/60 font-medium">Saydo is processing...</p>
+                  <p className="text-white/40 text-sm">Extracting tasks and insights</p>
                 </motion.div>
               )}
             </div>
@@ -350,4 +398,3 @@ export function VoiceRecorderModal({
     </AnimatePresence>
   )
 }
-

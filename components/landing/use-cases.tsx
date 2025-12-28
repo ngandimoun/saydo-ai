@@ -1,9 +1,18 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { useEffect, useRef } from "react"
+import { motion, useInView } from "framer-motion"
+import { gsap } from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { Rocket, Stethoscope, Users, Dna, Baby, Brain } from "lucide-react"
 import { OptionalImage } from "@/components/ui/optional-image"
 import { getLandingImageUrl } from "@/lib/landing-images"
+import { prefersReducedMotion, durations } from "@/lib/animation-config"
+
+// Register ScrollTrigger
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 const useCases = [
   {
@@ -15,6 +24,7 @@ const useCases = [
     iconBg: "bg-amber-100",
     iconColor: "text-amber-600",
     borderColor: "border-amber-200/60",
+    hoverBorder: "hover:border-amber-300",
     imageKey: "use-case-founder" as const,
   },
   {
@@ -26,6 +36,7 @@ const useCases = [
     iconBg: "bg-rose-100",
     iconColor: "text-rose-600",
     borderColor: "border-rose-200/60",
+    hoverBorder: "hover:border-rose-300",
     imageKey: "use-case-healthcare" as const,
   },
   {
@@ -37,6 +48,7 @@ const useCases = [
     iconBg: "bg-sky-100",
     iconColor: "text-sky-600",
     borderColor: "border-sky-200/60",
+    hoverBorder: "hover:border-sky-300",
     imageKey: "use-case-caregiver" as const,
   },
   {
@@ -48,6 +60,7 @@ const useCases = [
     iconBg: "bg-violet-100",
     iconColor: "text-violet-600",
     borderColor: "border-violet-200/60",
+    hoverBorder: "hover:border-violet-300",
     imageKey: "use-case-writer" as const,
   },
   {
@@ -59,6 +72,7 @@ const useCases = [
     iconBg: "bg-emerald-100",
     iconColor: "text-emerald-600",
     borderColor: "border-emerald-200/60",
+    hoverBorder: "hover:border-emerald-300",
     imageKey: "use-case-technician" as const,
   },
   {
@@ -70,13 +84,52 @@ const useCases = [
     iconBg: "bg-slate-100",
     iconColor: "text-slate-600",
     borderColor: "border-slate-200/60",
+    hoverBorder: "hover:border-slate-300",
     imageKey: undefined,
   },
 ]
 
 export const UseCases = () => {
+  const sectionRef = useRef<HTMLElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return
+
+    const ctx = gsap.context(() => {
+      if (gridRef.current) {
+        const cards = gridRef.current.querySelectorAll(".use-case-card")
+
+        gsap.fromTo(
+          cards,
+          {
+            y: 60,
+            opacity: 0,
+            scale: 0.95,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            duration: durations.slow,
+            stagger: durations.staggerNormal,
+            ease: "power3.out",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: gridRef.current,
+              start: "top 85%",
+            },
+          }
+        )
+      }
+    }, sectionRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="w-full py-20 sm:py-28 px-4 bg-gradient-to-b from-background to-secondary">
+    <section ref={sectionRef} className="w-full py-20 sm:py-28 px-4 bg-gradient-to-b from-background to-secondary overflow-hidden">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div
@@ -96,33 +149,49 @@ export const UseCases = () => {
         </motion.div>
 
         {/* Use Cases Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+        <div ref={gridRef} className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {useCases.map((useCase, index) => (
             <motion.div
               key={useCase.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.08 }}
-              className={`saydo-card bg-gradient-to-br ${useCase.gradient} dark:bg-card/60 dark:border-primary/30 border ${useCase.borderColor} p-5 sm:p-6 overflow-hidden group`}
+              whileHover={{ 
+                y: -8,
+                transition: { type: "spring", stiffness: 400, damping: 15 }
+              }}
+              className={`use-case-card saydo-card bg-gradient-to-br ${useCase.gradient} dark:bg-card/60 dark:border-primary/30 border ${useCase.borderColor} ${useCase.hoverBorder} p-5 sm:p-6 overflow-hidden group cursor-pointer transition-colors`}
+              style={{ transformStyle: "preserve-3d" }}
             >
+              {/* Spotlight effect on hover */}
+              <div 
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                style={{
+                  background: "radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(13, 148, 136, 0.06), transparent 40%)",
+                }}
+              />
+
               {useCase.imageKey && (
                 <div className="relative w-full aspect-video mb-4 rounded-xl overflow-hidden bg-white/50 dark:bg-card/50">
                   <OptionalImage
                     src={getLandingImageUrl(useCase.imageKey)}
                     alt={`${useCase.title} using Saydo`}
                     fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
                     sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   />
+                  {/* Image overlay on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 </div>
               )}
-              <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 ${useCase.iconBg} dark:bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105`}>
+
+              <div className="flex items-start gap-4 relative z-10">
+                <motion.div
+                  whileHover={{ rotate: 10, scale: 1.1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  className={`w-12 h-12 ${useCase.iconBg} dark:bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}
+                >
                   <useCase.icon className={`${useCase.iconColor} dark:text-primary w-6 h-6`} />
-                </div>
+                </motion.div>
                 <div className="flex-1">
-                  <h3 className="text-foreground dark:text-foreground font-semibold text-lg mb-1">
+                  <h3 className="text-foreground dark:text-foreground font-semibold text-lg mb-1 group-hover:text-primary transition-colors">
                     {useCase.title}
                   </h3>
                   <p className="text-primary dark:text-primary/80 text-sm font-medium mb-2">
@@ -133,9 +202,44 @@ export const UseCases = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Bottom gradient line on hover */}
+              <motion.div
+                initial={{ scaleX: 0 }}
+                whileHover={{ scaleX: 1 }}
+                transition={{ duration: 0.3 }}
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary via-primary to-primary/50 origin-left"
+              />
             </motion.div>
           ))}
         </div>
+
+        {/* Social Proof Counter */}
+        {isInView && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.6 }}
+            className="mt-16 text-center"
+          >
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-card border border-border shadow-sm">
+              <div className="flex -space-x-2">
+                {[...Array(4)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 border-2 border-card flex items-center justify-center text-xs font-medium text-primary"
+                  >
+                    {["S", "M", "K", "J"][i]}
+                  </div>
+                ))}
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium text-foreground">Join 1,000+ people</p>
+                <p className="text-xs text-muted-foreground">who stopped guessing</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
     </section>
   )

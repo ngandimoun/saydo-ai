@@ -2,15 +2,18 @@
 
 import { useRef, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Play, Pause, X, Volume2 } from "lucide-react"
+import { Play, Pause, X, Music2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
- * Mini Audio Player
+ * Mini Audio Player - Spotify-Inspired
  * 
  * Persistent mini player that sits above the bottom navigation.
- * Stays visible across all tabs without blocking content.
- * Can be expanded to a full player view.
+ * Features:
+ * - Gradient background for visibility
+ * - Animated waveform when playing
+ * - Progress bar with drag support
+ * - Smooth animations
  * 
  * TODO (Backend Integration):
  * - Save playback progress to user's profile
@@ -25,6 +28,8 @@ interface MiniPlayerProps {
     narrator?: string
     audioUrl: string
     durationSeconds: number
+    thumbnailUrl?: string
+    category?: string
   }
   isPlaying: boolean
   currentTime: number
@@ -32,6 +37,7 @@ interface MiniPlayerProps {
   onPause: () => void
   onSeek: (time: number) => void
   onClose: () => void
+  onExpand?: () => void
 }
 
 export function MiniPlayer({
@@ -41,7 +47,8 @@ export function MiniPlayer({
   onPlay,
   onPause,
   onSeek,
-  onClose
+  onClose,
+  onExpand
 }: MiniPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [localProgress, setLocalProgress] = useState(0)
@@ -79,7 +86,7 @@ export function MiniPlayer({
     if (!audio) return
     
     const progress = (audio.currentTime / audio.duration) * 100
-    setLocalProgress(progress)
+    setLocalProgress(isNaN(progress) ? 0 : progress)
     onSeek(audio.currentTime)
   }
 
@@ -104,100 +111,136 @@ export function MiniPlayer({
   }
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className={cn(
-          "fixed left-0 right-0 z-45",
-          "bottom-[76px]", // Above bottom nav (64px) + safe area
-          "px-3"
-        )}
-      >
-        <div className={cn(
-          "bg-card/95 backdrop-blur-lg",
-          "border border-border/50 rounded-2xl",
-          "shadow-lg shadow-black/10",
-          "overflow-hidden"
-        )}>
-          {/* Hidden audio element */}
-          <audio
-            ref={audioRef}
-            onTimeUpdate={handleTimeUpdate}
-            onEnded={onClose}
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className={cn(
+        "fixed left-0 right-0 z-40",
+        // Position above bottom nav (64px) + safe area for PWA
+        "bottom-[calc(4.5rem+env(safe-area-inset-bottom))]",
+        "px-3"
+      )}
+    >
+      <div className={cn(
+        // Gradient background for better visibility
+        "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600",
+        "rounded-2xl",
+        "shadow-xl shadow-purple-500/30",
+        "overflow-hidden"
+      )}>
+        {/* Hidden audio element */}
+        <audio
+          ref={audioRef}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={onClose}
+        />
+
+        {/* Progress bar */}
+        <div 
+          className="h-1 bg-white/20 cursor-pointer"
+          onClick={handleProgressClick}
+        >
+          <motion.div 
+            className="h-full bg-white"
+            style={{ width: `${localProgress}%` }}
+            transition={{ type: "tween", duration: 0.1 }}
           />
+        </div>
 
-          {/* Progress bar */}
-          <div 
-            className="h-1 bg-muted/50 cursor-pointer"
-            onClick={handleProgressClick}
+        {/* Player content */}
+        <div className="flex items-center gap-3 p-3">
+          {/* Clickable area to expand - Album art + Track info */}
+          <button 
+            onClick={onExpand}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            aria-label="Expand player"
           >
-            <motion.div 
-              className="h-full bg-primary"
-              style={{ width: `${localProgress}%` }}
-            />
-          </div>
+            {/* Album art placeholder with animated waveform */}
+            <div className="relative w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+              {isPlaying ? (
+                <div className="flex items-end gap-0.5 h-5">
+                  {[...Array(4)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="w-1 bg-white rounded-full"
+                      animate={{
+                        height: [8, 16 + Math.random() * 4, 8],
+                      }}
+                      transition={{
+                        duration: 0.5 + Math.random() * 0.2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                        delay: i * 0.1
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Music2 size={18} className="text-white/80" />
+              )}
+            </div>
 
-          {/* Player content */}
-          <div className="flex items-center gap-3 p-3">
             {/* Track info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
+              <p className="text-sm font-medium text-white truncate">
                 {track.title}
               </p>
               {track.narrator && (
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-xs text-white/70 truncate">
                   {track.narrator}
                 </p>
               )}
             </div>
+          </button>
 
-            {/* Time display */}
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {formatTime(currentTime)} / {formatTime(track.durationSeconds)}
-            </span>
+          {/* Time display */}
+          <span className="text-xs text-white/70 tabular-nums hidden sm:block">
+            {formatTime(currentTime)} / {formatTime(track.durationSeconds)}
+          </span>
 
-            {/* Controls */}
-            <div className="flex items-center gap-1">
-              {/* Play/Pause */}
-              <button
-                onClick={isPlaying ? onPause : onPlay}
-                className={cn(
-                  "w-10 h-10 rounded-full",
-                  "flex items-center justify-center",
-                  "bg-primary text-primary-foreground",
-                  "hover:bg-primary/90 transition-colors",
-                  "touch-manipulation"
-                )}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? (
-                  <Pause size={18} />
-                ) : (
-                  <Play size={18} className="ml-0.5" />
-                )}
-              </button>
+          {/* Controls */}
+          <div className="flex items-center gap-1">
+            {/* Play/Pause */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={isPlaying ? onPause : onPlay}
+              className={cn(
+                "w-10 h-10 rounded-full",
+                "flex items-center justify-center",
+                "bg-white text-purple-600",
+                "shadow-lg shadow-black/20",
+                "touch-manipulation"
+              )}
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <Pause size={18} className="text-purple-600" />
+              ) : (
+                <Play size={18} className="ml-0.5 text-purple-600" />
+              )}
+            </motion.button>
 
-              {/* Close */}
-              <button
-                onClick={onClose}
-                className={cn(
-                  "w-8 h-8 rounded-full",
-                  "flex items-center justify-center",
-                  "text-muted-foreground hover:text-foreground",
-                  "transition-colors touch-manipulation"
-                )}
-                aria-label="Close player"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {/* Close */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onClose}
+              className={cn(
+                "w-8 h-8 rounded-full",
+                "flex items-center justify-center",
+                "text-white/70 hover:text-white hover:bg-white/10",
+                "transition-colors touch-manipulation"
+              )}
+              aria-label="Close player"
+            >
+              <X size={18} />
+            </motion.button>
           </div>
         </div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </motion.div>
   )
 }
-

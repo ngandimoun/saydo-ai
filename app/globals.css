@@ -5,13 +5,15 @@
 
 /* ============================================
    SAYDO DESIGN SYSTEM
-   Elegant, Warm, Apple-Inspired
+   Airbnb-Inspired: Unified, Universal, Iconic, Conversational
+   Philosophy: "Belong to Yourself"
    ============================================ */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-dm-sans);
+  --font-sans: var(--font-outfit);
+  --font-body: var(--font-jakarta);
   --font-serif: var(--font-playfair);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -53,45 +55,80 @@
 }
 
 /* ============================================
-   SAYDO BRAND COLORS - Warm Teal Theme
+   SAYDO BRAND COLORS - Airbnb-Inspired Palette
+   Light Mode: Morning Calm
+   Dark Mode: Evening Tranquility
    ============================================ */
 :root {
-  --radius: 0.75rem;
+  --radius: 0.875rem;
   
-  /* Saydo Brand - Warm Teal */
+  /* Saydo Brand - Refined Teal */
   --saydo-teal: #0D9488;
   --saydo-teal-light: #14B8A6;
   --saydo-teal-dark: #0F766E;
   --saydo-teal-glow: rgba(13, 148, 136, 0.4);
+  --saydo-teal-subtle: rgba(13, 148, 136, 0.08);
   
-  /* Warm Background Palette - Calm Cream */
-  --saydo-cream: #F7F5F0;
-  --saydo-cream-dark: #F0EDE6;
-  --saydo-warm-white: #FDFCFA;
+  /* Golden Hour Accent - Warmth & Energy */
+  --saydo-golden: #F59E0B;
+  --saydo-golden-light: #FBBF24;
+  --saydo-golden-glow: rgba(245, 158, 11, 0.3);
   
-  /* Text Colors */
-  --saydo-charcoal: #1F2937;
-  --saydo-gray: #6B7280;
-  --saydo-gray-light: #9CA3AF;
+  /* Health Palette */
+  --saydo-rose: #F43F5E;
+  --saydo-rose-light: #FB7185;
+  --saydo-rose-glow: rgba(244, 63, 94, 0.3);
+  
+  /* Calm Palette */
+  --saydo-indigo: #6366F1;
+  --saydo-indigo-light: #818CF8;
+  --saydo-indigo-glow: rgba(99, 102, 241, 0.3);
+  
+  /* Background Palette - Warm Pearl (Morning Calm) */
+  --saydo-pearl: #FAFAF8;
+  --saydo-cream: #F5F5F3;
+  --saydo-cream-dark: #EEEEE9;
+  --saydo-warm-white: #FFFFFF;
+  
+  /* Text Colors - Warm Neutrals */
+  --saydo-charcoal: #18181B;
+  --saydo-gray-900: #27272A;
+  --saydo-gray-700: #3F3F46;
+  --saydo-gray-500: #71717A;
+  --saydo-gray-400: #A1A1AA;
+  --saydo-gray-300: #D4D4D8;
+  --saydo-gray-200: #E4E4E7;
+  --saydo-gray-100: #F4F4F5;
+  
+  /* Shadow System - Soft & Elevated */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.07), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-glow-teal: 0 0 20px rgba(13, 148, 136, 0.15), 0 0 40px rgba(13, 148, 136, 0.1);
+  --shadow-glow-rose: 0 0 20px rgba(244, 63, 94, 0.15), 0 0 40px rgba(244, 63, 94, 0.1);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
   
   /* UI Colors */
-  --background: #F7F5F0;
-  --foreground: #1F2937;
-  --card: #FDFCFA;
-  --card-foreground: #1F2937;
-  --popover: #FDFCFA;
-  --popover-foreground: #1F2937;
+  --background: #FAFAF8;
+  --foreground: #18181B;
+  --card: #FFFFFF;
+  --card-foreground: #18181B;
+  --popover: #FFFFFF;
+  --popover-foreground: #18181B;
   --primary: #0D9488;
   --primary-foreground: #FFFFFF;
-  --secondary: #F0EDE6;
-  --secondary-foreground: #1F2937;
-  --muted: #F0EDE6;
-  --muted-foreground: #6B7280;
-  --accent: #E6F7F5;
+  --secondary: #F4F4F5;
+  --secondary-foreground: #27272A;
+  --muted: #F4F4F5;
+  --muted-foreground: #71717A;
+  --accent: rgba(13, 148, 136, 0.08);
   --accent-foreground: #0D9488;
   --destructive: #EF4444;
-  --border: #E5E7EB;
-  --input: #E5E7EB;
+  --border: #E4E4E7;
+  --input: #E4E4E7;
   --ring: #0D9488;
   --chart-1: #0D9488;
   --chart-2: #14B8A6;
@@ -99,47 +136,99 @@
   --chart-4: #5EEAD4;
   --chart-5: #99F6E4;
   --sidebar: #FFFFFF;
-  --sidebar-foreground: #1F2937;
+  --sidebar-foreground: #18181B;
   --sidebar-primary: #0D9488;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E6F7F5;
+  --sidebar-accent: rgba(13, 148, 136, 0.08);
   --sidebar-accent-foreground: #0D9488;
-  --sidebar-border: #E5E7EB;
+  --sidebar-border: #E4E4E7;
   --sidebar-ring: #0D9488;
+  
+  /* Glass Effects - Light Mode */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-blur: 12px;
+  
+  /* Spacing Scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
 }
 
 .dark {
-  --background: #0F172A;
-  --foreground: #F8FAFC;
-  --card: #1E293B;
-  --card-foreground: #F8FAFC;
-  --popover: #1E293B;
-  --popover-foreground: #F8FAFC;
-  --primary: #14B8A6;
-  --primary-foreground: #0F172A;
-  --secondary: #334155;
-  --secondary-foreground: #F8FAFC;
-  --muted: #334155;
-  --muted-foreground: #94A3B8;
-  --accent: #134E4A;
+  /* Background - Deep Slate (Evening Tranquility) */
+  --saydo-pearl: #0C1222;
+  --saydo-cream: #111827;
+  --saydo-cream-dark: #1F2937;
+  
+  /* Enhanced Dark Text Colors */
+  --saydo-charcoal: #F9FAFB;
+  --saydo-gray-900: #F3F4F6;
+  --saydo-gray-700: #E5E7EB;
+  --saydo-gray-500: #9CA3AF;
+  --saydo-gray-400: #6B7280;
+  --saydo-gray-300: #4B5563;
+  --saydo-gray-200: #374151;
+  --saydo-gray-100: #1F2937;
+  
+  /* Luminous Teal for Dark Mode */
+  --saydo-teal: #2DD4BF;
+  --saydo-teal-light: #5EEAD4;
+  --saydo-teal-glow: rgba(45, 212, 191, 0.5);
+  --saydo-teal-subtle: rgba(45, 212, 191, 0.12);
+  
+  /* Dark Mode Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  --shadow-glow-teal: 0 0 30px rgba(45, 212, 191, 0.25), 0 0 60px rgba(45, 212, 191, 0.15);
+  --shadow-glow-rose: 0 0 30px rgba(251, 113, 133, 0.25), 0 0 60px rgba(251, 113, 133, 0.15);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  
+  /* UI Colors */
+  --background: #0C1222;
+  --foreground: #F9FAFB;
+  --card: rgba(26, 35, 50, 0.8);
+  --card-foreground: #F9FAFB;
+  --popover: rgba(26, 35, 50, 0.95);
+  --popover-foreground: #F9FAFB;
+  --primary: #2DD4BF;
+  --primary-foreground: #0C1222;
+  --secondary: rgba(255, 255, 255, 0.08);
+  --secondary-foreground: #F3F4F6;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #9CA3AF;
+  --accent: rgba(45, 212, 191, 0.15);
   --accent-foreground: #5EEAD4;
-  --destructive: #F87171;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.15);
-  --ring: #14B8A6;
-  --chart-1: #14B8A6;
-  --chart-2: #2DD4BF;
-  --chart-3: #5EEAD4;
-  --chart-4: #99F6E4;
-  --chart-5: #CCFBF1;
-  --sidebar: #1E293B;
-  --sidebar-foreground: #F8FAFC;
-  --sidebar-primary: #14B8A6;
-  --sidebar-primary-foreground: #0F172A;
-  --sidebar-accent: #134E4A;
+  --destructive: #FB7185;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #2DD4BF;
+  --chart-1: #2DD4BF;
+  --chart-2: #5EEAD4;
+  --chart-3: #99F6E4;
+  --chart-4: #CCFBF1;
+  --chart-5: #F0FDFA;
+  --sidebar: rgba(26, 35, 50, 0.9);
+  --sidebar-foreground: #F9FAFB;
+  --sidebar-primary: #2DD4BF;
+  --sidebar-primary-foreground: #0C1222;
+  --sidebar-accent: rgba(45, 212, 191, 0.15);
   --sidebar-accent-foreground: #5EEAD4;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #14B8A6;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #2DD4BF;
+  
+  /* Glass Effects - Dark Mode (Frosted Glass) */
+  --glass-bg: rgba(26, 35, 50, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 16px;
 }
 
 /* ============================================
@@ -151,31 +240,75 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   
-  /* Elegant selection */
+  /* Elegant selection - theme aware */
   ::selection {
-    background: rgba(13, 148, 136, 0.2);
-    color: var(--saydo-charcoal);
+    background: var(--saydo-teal-subtle);
+    color: var(--foreground);
+  }
+  
+  /* Smooth focus transitions */
+  *:focus {
+    transition: outline-offset 150ms ease;
+  }
+  
+  /* Remove tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
 /* ============================================
-   TYPOGRAPHY
+   TYPOGRAPHY - Airbnb-Inspired Hierarchy
+   Display: Outfit (headlines, numbers)
+   Body: Plus Jakarta Sans (readable, warm)
    ============================================ */
+
+/* Font family utilities */
+.font-display {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+}
+
 .font-serif {
   font-family: var(--font-playfair), Georgia, 'Times New Roman', serif;
 }
 
 .font-sans {
-  font-family: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
 }
 
-/* Headline styles */
+.font-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* Saydo Display Headlines - Bold & Modern */
+.saydo-display {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.saydo-display-xl {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+/* Legacy headline styles (keep for compatibility) */
 .saydo-headline {
-  font-family: var(--font-playfair), Georgia, serif;
-  font-weight: 500;
+  font-family: var(--font-outfit), var(--font-playfair), Georgia, serif;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
@@ -186,11 +319,62 @@
   font-weight: 400;
 }
 
-/* Body text */
+/* Section titles */
+.saydo-title {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+/* Subtitles and labels */
+.saydo-subtitle {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+/* Body text - warm and readable */
 .saydo-body {
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
-  line-height: 1.7;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 400;
+  line-height: 1.65;
   letter-spacing: 0.01em;
+}
+
+.saydo-body-medium {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
+}
+
+/* Small text and captions */
+.saydo-caption {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+
+/* Labels and overlines */
+.saydo-label {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* Tabular numbers for data */
+.saydo-data {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 500;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
 }
 
 /* ============================================
@@ -294,62 +478,639 @@
 .animation-delay-500 { animation-delay: 500ms; }
 
 /* ============================================
-   COMPONENTS
+   CSS SPRING ANIMATIONS (Motion Dev)
    ============================================ */
 
-/* Elegant card with soft shadow */
+/* Spring easing functions */
+:root {
+  --spring-snappy: linear(0, 0.1719, 0.4986, 0.7952, 0.9887, 1.0779, 1.0939, 1.0726, 1.0412, 1.0148, 0.9986, 0.9919, 0.9913, 0.9937, 0.9967, 0.999, 1.0003, 1);
+  --spring-gentle: linear(0, 0.1116, 0.3464, 0.5762, 0.7552, 0.8759, 0.9493, 0.9889, 1.0069, 1.0115, 1.0087, 1.0034, 0.9992, 0.9972, 0.9971, 0.9981, 0.9992, 1);
+  --spring-bouncy: linear(0, 0.1462, 0.4264, 0.6859, 0.8659, 0.9682, 1.0235, 1.0473, 1.0485, 1.0362, 1.0182, 1.0027, 0.9927, 0.9884, 0.9878, 0.9896, 0.9926, 0.9958, 0.9983, 1);
+  --spring-quick: linear(0, 0.2204, 0.5953, 0.8684, 1.0000, 1.0485, 1.0485, 1.0229, 1.0000, 0.9917, 0.9917, 0.9959, 1);
+  
+  /* Glow colors */
+  --glow-primary: rgba(13, 148, 136, 0.4);
+  --glow-primary-strong: rgba(13, 148, 136, 0.6);
+  --glow-rose: rgba(244, 63, 94, 0.4);
+  --glow-purple: rgba(139, 92, 246, 0.4);
+}
+
+.dark {
+  --glow-primary: rgba(20, 184, 166, 0.5);
+  --glow-primary-strong: rgba(20, 184, 166, 0.7);
+  --glow-rose: rgba(251, 113, 133, 0.5);
+  --glow-purple: rgba(167, 139, 250, 0.5);
+}
+
+/* ============================================
+   MAGNETIC BUTTON STYLES
+   ============================================ */
+
+.magnetic-button {
+  position: relative;
+  cursor: pointer;
+  will-change: transform;
+  transition: transform 550ms var(--spring-snappy);
+}
+
+.magnetic-button::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Button glow on hover */
+.button-glow {
+  position: relative;
+  overflow: visible;
+}
+
+.button-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--saydo-teal-light), var(--saydo-teal));
+  opacity: 0;
+  z-index: -1;
+  filter: blur(12px);
+  transition: opacity 350ms var(--spring-quick);
+}
+
+.button-glow:hover::after {
+  opacity: 0.5;
+}
+
+/* ============================================
+   ADVANCED ANIMATION KEYFRAMES
+   ============================================ */
+
+/* Spotlight sweep */
+@keyframes spotlight-sweep {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Gradient shift */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Glow pulse */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--glow-primary), 0 4px 20px rgba(13, 148, 136, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--glow-primary-strong), 0 8px 30px rgba(13, 148, 136, 0.4);
+  }
+}
+
+/* Neural pulse for connections */
+@keyframes neural-pulse {
+  0%, 100% {
+    stroke-dashoffset: 0;
+    opacity: 0.3;
+  }
+  50% {
+    stroke-dashoffset: -20;
+    opacity: 0.8;
+  }
+}
+
+/* Text reveal clip */
+@keyframes text-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Particle float */
+@keyframes particle-float {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--particle-x, 100px), var(--particle-y, -200px)) rotate(var(--particle-rotate, 180deg));
+    opacity: 0;
+  }
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Scale in with glow */
+@keyframes scale-glow-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  50% {
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* Draw line animation */
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: var(--line-length, 100);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ============================================
+   ANIMATION UTILITY CLASSES
+   ============================================ */
+
+.animate-spotlight {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: spotlight-sweep 3s ease-in-out infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-scale-glow {
+  animation: scale-glow-in 0.6s var(--spring-bouncy) forwards;
+}
+
+/* GSAP animation helpers - initial states */
+.gsap-fade-up {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.gsap-fade-down {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.gsap-fade-left {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+.gsap-fade-right {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+.gsap-scale-in {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+/* ============================================
+   PARTICLE BACKGROUND
+   ============================================ */
+
+.particle-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--saydo-teal);
+  opacity: 0.3;
+  animation: particle-float var(--particle-duration, 20s) ease-in-out infinite;
+  animation-delay: var(--particle-delay, 0s);
+}
+
+/* ============================================
+   SCROLL-TRIGGERED SECTION STYLES
+   ============================================ */
+
+.section-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.6s var(--spring-gentle), transform 0.6s var(--spring-gentle);
+}
+
+.section-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Card hover depth effect */
+.card-depth {
+  transition: transform 350ms var(--spring-snappy), box-shadow 350ms var(--spring-snappy);
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.card-depth:hover {
+  transform: translateY(-8px) rotateX(2deg);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.08),
+    0 8px 16px rgba(0, 0, 0, 0.04);
+}
+
+/* Spotlight card effect */
+.card-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(13, 148, 136, 0.1),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 500ms;
+  pointer-events: none;
+}
+
+.card-spotlight:hover::before {
+  opacity: 1;
+}
+
+/* Text emphasis animation */
+.text-emphasis {
+  position: relative;
+  display: inline-block;
+}
+
+.text-emphasis::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--saydo-teal), var(--saydo-teal-light));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 500ms var(--spring-bouncy);
+}
+
+.text-emphasis.is-visible::after {
+  transform: scaleX(1);
+}
+
+/* ============================================
+   GLASS MORPHISM UTILITIES
+   ============================================ */
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.dark .glass-subtle {
+  background: rgba(26, 35, 50, 0.4);
+}
+
+.glass-strong {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+/* ============================================
+   COMPONENTS - Airbnb-Inspired Cards
+   ============================================ */
+
+/* Base card - elevated surface */
 .saydo-card {
   background: var(--card);
-  border-radius: 1.25rem;
-  box-shadow: 
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 4px 12px rgba(0, 0, 0, 0.03),
-    0 0 0 1px rgba(0, 0, 0, 0.02);
-  transition: all 0.3s ease;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
 }
 
 .saydo-card:hover {
-  box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.06),
-    0 8px 24px rgba(0, 0, 0, 0.05),
-    0 0 0 1px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-4px);
+}
+
+.saydo-card:active {
+  transform: translateY(-2px) scale(0.99);
+}
+
+/* Card with glow effect */
+.saydo-card-glow {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.saydo-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--saydo-teal), transparent 50%, var(--saydo-golden) 100%);
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 300ms ease;
+}
+
+.saydo-card-glow:hover::before {
+  opacity: 0.15;
+}
+
+.dark .saydo-card-glow:hover::before {
+  opacity: 0.25;
+}
+
+/* Interactive card with spotlight */
+.saydo-card-spotlight {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  transition: all 300ms ease;
+}
+
+.saydo-card-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    400px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    var(--saydo-teal-subtle),
+    transparent 50%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.saydo-card-spotlight:hover::after {
+  opacity: 1;
+}
+
+/* Glass card */
+.saydo-card-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  transition: all 300ms ease;
+}
+
+.saydo-card-glass:hover {
+  background: rgba(255, 255, 255, 0.9);
   transform: translateY(-2px);
 }
 
-/* Teal gradient button */
+.dark .saydo-card-glass:hover {
+  background: rgba(26, 35, 50, 0.8);
+}
+
+/* Featured/Hero card */
+.saydo-card-featured {
+  background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-dark) 100%);
+  border-radius: var(--radius-2xl);
+  color: white;
+  overflow: hidden;
+  position: relative;
+  box-shadow: var(--shadow-glow-teal);
+}
+
+.saydo-card-featured::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 0%, rgba(255, 255, 255, 0.2), transparent 50%);
+  pointer-events: none;
+}
+
+/* Primary button - Signature Saydo action */
 .saydo-button-primary {
   background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-dark) 100%);
   color: white;
+  font-family: var(--font-outfit), system-ui, sans-serif;
   font-weight: 600;
+  font-size: 0.9375rem;
   border-radius: 9999px;
-  padding: 0.875rem 2rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+  padding: 0.875rem 1.75rem;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 300ms ease;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.saydo-button-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent);
+  pointer-events: none;
 }
 
 .saydo-button-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .saydo-button-primary:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+}
+
+.saydo-button-primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Secondary button */
+.saydo-button-secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 9999px;
+  padding: 0.875rem 1.75rem;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.saydo-button-secondary:hover {
+  background: var(--muted);
+  border-color: var(--saydo-gray-400);
+  transform: translateY(-1px);
+}
+
+.saydo-button-secondary:active {
+  transform: scale(0.98);
 }
 
 /* Ghost button */
 .saydo-button-ghost {
   background: transparent;
-  color: var(--saydo-charcoal);
+  color: var(--foreground);
+  font-family: var(--font-outfit), system-ui, sans-serif;
   font-weight: 500;
+  font-size: 0.9375rem;
   border-radius: 9999px;
-  padding: 0.875rem 2rem;
+  padding: 0.875rem 1.75rem;
   border: 1.5px solid var(--border);
-  transition: all 0.3s ease;
+  cursor: pointer;
+  transition: all 250ms ease;
 }
 
 .saydo-button-ghost:hover {
-  background: var(--saydo-cream-dark);
-  border-color: var(--saydo-gray-light);
+  background: var(--muted);
+  border-color: var(--saydo-gray-300);
+}
+
+.saydo-button-ghost:active {
+  transform: scale(0.98);
+}
+
+/* Icon button */
+.saydo-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.saydo-button-icon:hover {
+  background: var(--muted);
+  transform: scale(1.08);
+}
+
+.saydo-button-icon:active {
+  transform: scale(0.95);
+}
+
+/* Chip/Pill button (Airbnb category style) */
+.saydo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: 9999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 250ms ease;
+  white-space: nowrap;
+}
+
+.saydo-chip:hover {
+  background: var(--secondary);
+  border-color: var(--saydo-gray-300);
+}
+
+.saydo-chip.active {
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+}
+
+.dark .saydo-chip.active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
 }
 
 /* Record button - the signature element */
@@ -413,12 +1174,65 @@
     width: 4.5rem;
     height: 4.5rem;
   }
+
+  /* Reduce animation complexity on mobile */
+  .card-depth:hover {
+    transform: translateY(-4px);
+  }
+
+  .card-spotlight::before {
+    display: none;
+  }
+
+  /* Simplify particle effects */
+  .particle-container {
+    opacity: 0.5;
+  }
+
+  /* Reduce glow intensity */
+  .animate-glow-pulse {
+    animation: none;
+    box-shadow: 0 0 20px var(--glow-primary), 0 4px 20px rgba(13, 148, 136, 0.3);
+  }
+
+  /* Simplify 3D effects */
+  .card-depth {
+    perspective: none;
+    transform-style: flat;
+  }
+}
+
+/* Small mobile optimizations */
+@media (max-width: 480px) {
+  .saydo-headline {
+    letter-spacing: -0.01em;
+  }
+
+  .animate-saydo-breathe {
+    animation-duration: 4s;
+  }
+
+  /* Hide particle background on very small screens */
+  .particle-container {
+    display: none;
+  }
 }
 
 /* Touch manipulation for better mobile performance */
 .touch-manipulation {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* GPU acceleration for animations */
+.will-animate {
+  will-change: transform, opacity;
+}
+
+/* Safe GPU compositing */
+.gpu-accelerate {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* ============================================
@@ -428,15 +1242,63 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Reduced motion - comprehensive fallbacks */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
   
   html {
     scroll-behavior: auto;
+  }
+
+  /* Remove all decorative animations */
+  .animate-saydo-pulse,
+  .animate-saydo-breathe,
+  .animate-saydo-ping,
+  .animate-fade-in-up,
+  .animate-float,
+  .animate-spotlight,
+  .animate-gradient-shift,
+  .animate-glow-pulse,
+  .animate-shimmer,
+  .animate-scale-glow {
+    animation: none !important;
+  }
+
+  /* Remove particle background */
+  .particle-container,
+  .particle {
+    display: none !important;
+  }
+
+  /* Remove hover transforms */
+  .card-depth:hover,
+  .saydo-card:hover {
+    transform: none !important;
+  }
+
+  /* Static states for animated elements */
+  .gsap-fade-up,
+  .gsap-fade-down,
+  .gsap-fade-left,
+  .gsap-fade-right,
+  .gsap-scale-in {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Remove glow effects */
+  .button-glow::after {
+    display: none !important;
+  }
+
+  /* Remove magnetic button effects */
+  .magnetic-button {
+    transform: none !important;
   }
 }
 
@@ -444,4 +1306,156 @@ html {
 :focus-visible {
   outline: 2px solid var(--saydo-teal);
   outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .saydo-card {
+    border: 2px solid var(--foreground);
+  }
+
+  .button-glow::after {
+    display: none;
+  }
+}
+
+/* ============================================
+   DASHBOARD SPECIFIC STYLES
+   ============================================ */
+
+/* Scrollbar hiding for horizontal scrolls */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Dashboard section transitions */
+.dashboard-section {
+  opacity: 1;
+}
+
+/* Safe area padding for mobile notch */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Voice recording waveform animation */
+@keyframes waveform-pulse {
+  0%, 100% {
+    transform: scaleY(0.3);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-waveform {
+  animation: waveform-pulse 0.5s ease-in-out infinite;
+}
+
+/* Gradient text for dashboard headers */
+.text-gradient-primary {
+  background: linear-gradient(135deg, var(--saydo-teal) 0%, var(--saydo-teal-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-health {
+  background: linear-gradient(135deg, #f43f5e 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Dashboard card hover states */
+.dashboard-card {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+}
+
+.dashboard-card:active {
+  transform: translateY(0);
+}
+
+/* Audio player progress bar */
+.audio-progress {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.audio-progress::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  margin-top: -4px;
+}
+
+.audio-progress::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--muted);
+  border-radius: 2px;
+}
+
+/* Floating button shadow */
+.floating-shadow {
+  box-shadow: 
+    0 10px 40px rgba(13, 148, 136, 0.3),
+    0 4px 12px rgba(13, 148, 136, 0.2);
+}
+
+/* Dashboard mobile optimizations */
+@media (max-width: 640px) {
+  /* Larger touch targets */
+  .dashboard-section button {
+    min-height: 44px;
+  }
+
+  /* Reduce animation complexity */
+  .dashboard-section .saydo-card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+/* Print styles - remove animations and decorative elements */
+@media print {
+  .particle-container,
+  .animate-saydo-breathe,
+  .animate-glow-pulse {
+    display: none !important;
+  }
 }

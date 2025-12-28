@@ -107,3 +107,6 @@ For future enhancement, you can add dark mode icons:
 
 And reference them in the manifest with media queries when browser support improves.
 
+
+
+

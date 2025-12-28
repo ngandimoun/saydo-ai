@@ -93,3 +93,5 @@ export function useGSAP() {
 // Export for direct use when needed
 export { gsap, ScrollTrigger }
 
+
+

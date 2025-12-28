@@ -2,14 +2,18 @@
 
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { Heart, CheckSquare, Moon, Mic } from "lucide-react"
+import { Heart, CheckSquare, Moon, Mic, Briefcase } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { springs, staggerContainer, staggerItem } from "@/lib/motion-system"
 
 /**
- * Quick Actions Grid
+ * Quick Actions Grid - Airbnb-Inspired
  * 
  * Quick navigation buttons to main sections.
- * These mirror the bottom nav tabs for easy access.
+ * Features:
+ * - Elevated card design with subtle shadows
+ * - Spring animations on hover/tap
+ * - Consistent color system
  */
 
 interface QuickAction {
@@ -17,8 +21,9 @@ interface QuickAction {
   label: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   href: string
-  color: string
-  bgColor: string
+  iconColor: string
+  bgGradient: string
+  description?: string
 }
 
 const quickActions: QuickAction[] = [
@@ -27,32 +32,36 @@ const quickActions: QuickAction[] = [
     label: 'Health',
     icon: Heart,
     href: '/dashboard/health',
-    color: 'text-rose-500',
-    bgColor: 'bg-rose-500/10 hover:bg-rose-500/20'
+    iconColor: 'text-rose-500',
+    bgGradient: 'from-rose-500/10 to-pink-500/5',
+    description: 'Track vitals'
   },
   {
     id: 'tasks',
     label: 'Tasks',
     icon: CheckSquare,
     href: '/dashboard/tasks',
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-500/10 hover:bg-blue-500/20'
+    iconColor: 'text-blue-500',
+    bgGradient: 'from-blue-500/10 to-indigo-500/5',
+    description: 'View todos'
+  },
+  {
+    id: 'pro',
+    label: 'Pro',
+    icon: Briefcase,
+    href: '/dashboard/pro',
+    iconColor: 'text-primary',
+    bgGradient: 'from-primary/10 to-teal-500/5',
+    description: 'Work files'
   },
   {
     id: 'calm',
     label: 'Calm',
     icon: Moon,
     href: '/dashboard/calm',
-    color: 'text-indigo-500',
-    bgColor: 'bg-indigo-500/10 hover:bg-indigo-500/20'
-  },
-  {
-    id: 'record',
-    label: 'Record',
-    icon: Mic,
-    href: '#', // Opens voice recorder instead
-    color: 'text-teal-500',
-    bgColor: 'bg-teal-500/10 hover:bg-teal-500/20'
+    iconColor: 'text-indigo-500',
+    bgGradient: 'from-indigo-500/10 to-purple-500/5',
+    description: 'Relax'
   }
 ]
 
@@ -60,38 +69,56 @@ export function QuickActions() {
   const router = useRouter()
 
   const handleAction = (action: QuickAction) => {
-    if (action.id === 'record') {
-      // Voice recording is handled by the FAB
-      // This could open the voice modal
-      return
-    }
     router.push(action.href)
   }
 
   return (
-    <section className="space-y-3">
+    <motion.section 
+      className="space-y-4"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* Section header */}
+      <motion.div 
+        variants={staggerItem}
+        className="flex items-center justify-between"
+      >
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Quick Access
+        </h2>
+      </motion.div>
+
+      {/* Actions grid */}
       <div className="grid grid-cols-4 gap-3">
         {quickActions.map((action, index) => {
           const Icon = action.icon
           return (
             <motion.button
               key={action.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
+              variants={staggerItem}
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+              transition={springs.snappy}
               onClick={() => handleAction(action)}
               className={cn(
                 "flex flex-col items-center justify-center gap-2 p-4 rounded-2xl",
-                "transition-colors touch-manipulation",
-                action.bgColor
+                "bg-gradient-to-br border border-border/50",
+                "hover:border-border hover:shadow-md",
+                "transition-all duration-200 touch-manipulation",
+                action.bgGradient
               )}
             >
-              <div className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center",
-                action.bgColor.replace('/10', '/20').replace('/20', '/30')
-              )}>
-                <Icon size={22} className={action.color} />
-              </div>
+              <motion.div 
+                className={cn(
+                  "w-11 h-11 rounded-xl flex items-center justify-center",
+                  "bg-card shadow-sm"
+                )}
+                whileHover={{ rotate: 5 }}
+                transition={springs.bouncy}
+              >
+                <Icon size={22} className={action.iconColor} />
+              </motion.div>
               <span className="text-xs font-medium text-foreground">
                 {action.label}
               </span>
@@ -99,7 +126,6 @@ export function QuickActions() {
           )
         })}
       </div>
-    </section>
+    </motion.section>
   )
 }
-

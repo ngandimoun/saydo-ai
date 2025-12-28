@@ -1,22 +1,30 @@
-"use client"
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase-server"
+import { OnboardingPageClient } from "@/components/onboarding/onboarding-page-client"
 
-import { motion } from "framer-motion"
-import { LanguageProvider } from "@/lib/language-context"
-import { OnboardingForm } from "@/components/onboarding/onboarding-form"
+export default async function OnboardingPage() {
+  const supabase = await createClient()
+  
+  // Check if user is authenticated
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    // Redirect to home page if not authenticated
+    redirect("/")
+  }
 
-export default function OnboardingPage() {
-  return (
-    <LanguageProvider>
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 py-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full"
-        >
-          <OnboardingForm />
-        </motion.div>
-      </div>
-    </LanguageProvider>
-  )
+  // Check if user has already completed onboarding
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("preferred_name")
+    .eq("id", user.id)
+    .single()
+
+  // If preferred_name exists, user has completed onboarding -> redirect to dashboard
+  if (profile?.preferred_name) {
+    redirect("/dashboard")
+  }
+
+  // User is authenticated and hasn't completed onboarding -> show onboarding form
+  return <OnboardingPageClient />
 }

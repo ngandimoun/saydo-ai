@@ -64,3 +64,129 @@ The shadcn MCP provides access to:
 
 **Environment:** Requires `REPLICATE_API_TOKEN` in `.env.local`
 
+## Motion Dev MCP Server
+**IMPORTANT**: This project has Motion Dev MCP server configured at `.cursor/mcp.json`.
+
+**Always use the Motion Dev MCP tools** when:
+- Building UI animations and motion design
+- Creating complex animation sequences
+- Designing interactive motion experiences
+- Prototyping motion concepts
+- Getting motion design patterns and examples
+
+The Motion Dev MCP provides access to:
+- Motion design tools and workflows
+- Animation pattern libraries
+- Motion design best practices
+- UI animation examples and templates
+
+**Available MCP Tools:**
+- Use Motion Dev MCP tools for motion design workflows and UI animation development
+
+**When creating animations**, use the MCP to:
+1. Search for motion patterns and examples
+2. Reference animation best practices
+3. Get motion design templates
+4. Ensure consistency with motion design principles
+
+## GSAP Animation Library
+**IMPORTANT**: This project uses GSAP (GreenSock Animation Platform) for advanced animations alongside framer-motion.
+
+**When to use GSAP vs framer-motion:**
+- **Use GSAP for:**
+  - Complex timeline-based animations with precise sequencing
+  - Scroll-triggered animations (ScrollTrigger plugin)
+  - Advanced staggers and keyframe animations
+  - Performance-critical animations
+  - Animations requiring precise control over timing and sequencing
+  - Complex choreography with multiple elements
+
+- **Use framer-motion for:**
+  - React component animations
+  - Layout animations
+  - Gesture-based interactions
+  - Simple declarative animations
+
+**GSAP Core Concepts:**
+
+**Tweens** - The basic animation unit that animates properties:
+```typescript
+import { gsap } from "gsap";
+
+// Simple tween
+gsap.to(".element", { x: 100, duration: 1, ease: "power2.out" });
+
+// From tween (starts from value, animates to current)
+gsap.from(".element", { opacity: 0, y: 50, duration: 0.5 });
+
+// FromTo tween (explicit start and end)
+gsap.fromTo(".element", { x: 0 }, { x: 100, duration: 1 });
+```
+
+**Timelines** - Container for sequencing multiple animations:
+```typescript
+let tl = gsap.timeline();
+tl.to(".element1", { x: 100, duration: 1 })
+  .to(".element2", { y: 50, duration: 0.8 }, "-=0.5") // overlaps by 0.5s
+  .to(".element3", { opacity: 0, duration: 0.5 }, "+=0.2"); // gap of 0.2s
+```
+
+**Positioning in Timelines:**
+- Absolute time: `3` (3 seconds from start)
+- Relative to end: `"+=1"` (1 second after end) or `"-=1"` (1 second before end)
+- Labels: `"myLabel"` (insert at label)
+- Relative to label: `"myLabel+=1"` (1 second after label)
+- Relative to previous: `"<"` (start of previous) or `">"` (end of previous)
+
+**Key Features:**
+- **ScrollTrigger** - Scroll-based animations (requires plugin registration)
+- **Staggers** - Offset start times for multiple targets
+- **Keyframes** - Animate through multiple states
+- **Easing** - Built-in eases like "elastic", "bounce", "power1.out"
+- **Relative values** - Use `"+="` or `"-="` for relative animations
+- **Random values** - `"random(-100, 100)"` for randomized animations
+
+**Best Practices:**
+1. Use Timelines for any animation with 2+ steps - easier to control and adjust
+2. Use labels for important animation points - makes code more readable
+3. Leverage position parameters for precise timing control
+4. Use `gsap.context()` in React for proper cleanup
+5. Register plugins only once at app initialization
+6. Use `autoAlpha` instead of `opacity` when you need `visibility: hidden` at 0
+7. Prefer transform properties (x, y, rotation) over layout properties (top, left) for performance
+
+**Common Patterns:**
+
+**Scroll-triggered animation:**
+```typescript
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+gsap.registerPlugin(ScrollTrigger);
+
+gsap.to(".element", {
+  scrollTrigger: {
+    trigger: ".element",
+    start: "top center",
+    end: "bottom top",
+    scrub: true
+  },
+  x: 100,
+  rotation: 360
+});
+```
+
+**Stagger animation:**
+```typescript
+gsap.to(".items", {
+  y: 50,
+  opacity: 0,
+  duration: 0.5,
+  stagger: 0.1 // 0.1s between each item
+});
+```
+
+**Installation:** GSAP is installed via `npm install gsap`. All plugins are free and included.
+
+**Documentation:** See [GSAP Documentation](https://gsap.com/docs/) for complete API reference.
+

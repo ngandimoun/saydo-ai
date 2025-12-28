@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, createContext, useContext, useCallback } from "react"
+import { useState, createContext, useContext, useCallback, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { LanguageProvider } from "@/lib/language-context"
@@ -10,6 +10,8 @@ import { VoiceRecorderModal } from "@/components/dashboard/voice-recorder-modal"
 import { MiniPlayer } from "@/components/dashboard/player/mini-player"
 import { FullPlayer, type FullPlayerTrack } from "@/components/dashboard/player/full-player"
 import { springs } from "@/lib/motion-system"
+import { getAudioPlayer } from "@/lib/audio-player"
+import { logger } from "@/lib/logger"
 
 /**
  * Dashboard Layout - Airbnb-Inspired
@@ -98,6 +100,7 @@ interface DashboardLayoutClientProps {
 
 export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) {
   const pathname = usePathname()
+  const audioPlayerRef = useRef<ReturnType<typeof getAudioPlayer> | null>(null)
   
   // Voice recorder state
   const [isRecorderOpen, setIsRecorderOpen] = useState(false)
@@ -110,6 +113,63 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
   const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null)
   const [playlist, setPlaylist] = useState<AudioTrack[]>([])
   const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  // Initialize audio player
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    audioPlayerRef.current = getAudioPlayer()
+
+    audioPlayerRef.current.setCallbacks({
+      onPlay: () => setIsPlaying(true),
+      onPause: () => setIsPlaying(false),
+      onEnded: () => {
+        setIsPlaying(false)
+        setCurrentTime(0)
+        // Auto-play next track if available
+        playNext()
+      },
+      onTimeUpdate: (time) => setCurrentTime(time),
+      onLoadedMetadata: (dur) => setDuration(dur),
+      onError: (error) => {
+        logger.error('Audio player error', { error })
+        setIsPlaying(false)
+      },
+    })
+
+    return () => {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.destroy()
+        audioPlayerRef.current = null
+      }
+    }
+  }, [])
+
+  // Update audio player when track changes
+  useEffect(() => {
+    if (!audioPlayerRef.current || !currentTrack) return
+
+    audioPlayerRef.current.setSource(currentTrack.audioUrl)
+    
+    if (isPlaying) {
+      audioPlayerRef.current.play().catch((error) => {
+        logger.error('Failed to play audio', { error })
+        setIsPlaying(false)
+      })
+    }
+  }, [currentTrack, isPlaying])
+
+  // Sync playing state with audio player
+  useEffect(() => {
+    if (!audioPlayerRef.current) return
+
+    if (isPlaying) {
+      audioPlayerRef.current.play().catch(() => setIsPlaying(false))
+    } else {
+      audioPlayerRef.current.pause()
+    }
+  }, [isPlaying])
 
   // Play next track
   const playNext = useCallback(() => {
@@ -158,12 +218,28 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
     setTrack: (track) => {
       setCurrentTrack(track)
       setCurrentTime(0)
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.setSource(track.audioUrl)
+        audioPlayerRef.current.play().catch(() => setIsPlaying(false))
+      }
       setIsPlaying(true)
     },
-    play: () => setIsPlaying(true),
-    pause: () => setIsPlaying(false),
-    seek: (time) => setCurrentTime(time),
+    play: () => {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.play().catch(() => setIsPlaying(false))
+      }
+      setIsPlaying(true)
+    },
+    pause: () => {
+      audioPlayerRef.current?.pause()
+      setIsPlaying(false)
+    },
+    seek: (time) => {
+      audioPlayerRef.current?.seek(time)
+      setCurrentTime(time)
+    },
     close: () => {
+      audioPlayerRef.current?.stop()
       setCurrentTrack(null)
       setIsPlaying(false)
       setCurrentTime(0)
