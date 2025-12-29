@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { MessageCircle, X, Sparkles } from "lucide-react"
+import { MessageCircle } from "lucide-react"
 import { ChatPanel } from "./chat-panel"
 import { ChatMessage as ChatMessageType } from "./chat-message"
 import { cn } from "@/lib/utils"
@@ -12,10 +12,11 @@ import { springs } from "@/lib/motion-system"
  * Chat Widget Component - Airbnb-Inspired
  * 
  * Floating chat widget with:
+ * - Real AI responses via streaming API
+ * - Responses in user's preferred language
  * - Animated breathing effect when idle
  * - Glass-morphism styling
  * - Smooth expand/collapse transitions
- * - Context-aware positioning
  */
 
 interface ChatWidgetProps {
@@ -43,7 +44,10 @@ export function ChatWidget({ className, pageContext }: ChatWidgetProps) {
     return () => clearTimeout(timer)
   }, [messages.length])
 
-  const handleSendMessage = async (messageText: string) => {
+  /**
+   * Send message to the AI chat API with streaming support
+   */
+  const handleSendMessage = useCallback(async (messageText: string) => {
     setHasUnread(false)
     
     // Add user message immediately
@@ -57,8 +61,9 @@ export function ChatWidget({ className, pageContext }: ChatWidgetProps) {
     setMessages(prev => [...prev, userMessage])
 
     // Add loading message
+    const loadingId = `loading-${Date.now()}`
     const loadingMessage: ChatMessageType = {
-      id: `loading-${Date.now()}`,
+      id: loadingId,
       role: 'assistant',
       content: '',
       timestamp: new Date(),
@@ -68,20 +73,106 @@ export function ChatWidget({ className, pageContext }: ChatWidgetProps) {
     setMessages(prev => [...prev, loadingMessage])
     setIsProcessing(true)
 
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    try {
+      // Call the streaming chat API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageText,
+        }),
+      })
 
-    // Mock response
-    const mockResponse = generateMockResponse(messageText)
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
 
-    // Remove loading message and add response
-    setMessages(prev => {
-      const withoutLoading = prev.filter(m => !m.isLoading)
-      return [...withoutLoading, mockResponse]
-    })
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
 
-    setIsProcessing(false)
-  }
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      // Create assistant message for streaming
+      const assistantId = `assistant-${Date.now()}`
+      let fullContent = ''
+
+      // Remove loading message and add streaming message
+      setMessages(prev => {
+        const withoutLoading = prev.filter(m => m.id !== loadingId)
+        return [...withoutLoading, {
+          id: assistantId,
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+        }]
+      })
+
+      // Read the stream
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+
+        const text = decoder.decode(value, { stream: true })
+        const lines = text.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'text') {
+                fullContent += data.content
+                
+                // Update the message with new content
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, content: fullContent }
+                    : m
+                ))
+              } else if (data.type === 'done') {
+                // Mark streaming as complete
+                setMessages(prev => prev.map(m => 
+                  m.id === assistantId 
+                    ? { ...m, isStreaming: false }
+                    : m
+                ))
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Chat error:', error)
+      
+      // Remove loading message and add error response
+      setMessages(prev => {
+        const withoutLoading = prev.filter(m => m.id !== loadingId)
+        return [...withoutLoading, {
+          id: `error-${Date.now()}`,
+          role: 'assistant' as const,
+          content: error instanceof Error 
+            ? `Sorry, I encountered an error: ${error.message}. Please try again.`
+            : 'Sorry, something went wrong. Please try again.',
+          timestamp: new Date(),
+          isError: true,
+        }]
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [])
 
   const handleStartVoiceRecording = () => {
     setIsRecording(true)
@@ -206,65 +297,4 @@ export function ChatWidget({ className, pageContext }: ChatWidgetProps) {
       </AnimatePresence>
     </>
   )
-}
-
-/**
- * Generate mock response for UI demonstration
- */
-function generateMockResponse(question: string): ChatMessageType {
-  const lowerQuestion = question.toLowerCase()
-
-  // Health-related responses
-  if (lowerQuestion.includes('vitamin') || lowerQuestion.includes('supplement')) {
-    return {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: "Just Vitamin D and Magnesium. Your labs say your B12 is already optimal, so don't waste money on that today. Take the D3 with your lunch - it needs fat to absorb.",
-      timestamp: new Date(),
-      hasVoiceResponse: true,
-      voiceUrl: '/mock-voice-response.mp3'
-    }
-  }
-
-  // Schedule-related responses
-  if (lowerQuestion.includes('schedule') || lowerQuestion.includes('meeting') || lowerQuestion.includes('calendar')) {
-    return {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: "You have 3 meetings today: 10am team standup, 2pm client call, and 4pm project review. I've blocked out 1-2pm for focused work based on your productivity patterns.",
-      timestamp: new Date()
-    }
-  }
-
-  // Health summary
-  if (lowerQuestion.includes('health') || lowerQuestion.includes('summary')) {
-    return {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: "Your health is looking great! Energy at 78%, stress is manageable at 35%, and recovery is optimal at 82%. Your iron levels have improved since last week. Keep up the leafy greens!",
-      timestamp: new Date(),
-      hasVoiceResponse: true,
-      voiceUrl: '/mock-voice-response.mp3'
-    }
-  }
-
-  // Running/exercise-related responses
-  if (lowerQuestion.includes('run') || lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
-    return {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: "Based on your recovery metrics and today's schedule, I'd recommend a light 30-minute run. Your stress levels are moderate, so it should help. Avoid high intensity - your body needs recovery time.",
-      timestamp: new Date(),
-      hasVoiceResponse: true,
-      voiceUrl: '/mock-voice-response.mp3'
-    }
-  }
-
-  // Default response
-  return {
-    id: `assistant-${Date.now()}`,
-    role: 'assistant',
-    content: "I understand your question. Once connected to the backend, I'll be able to provide detailed answers based on your personal data. For now, I'm in demo mode showing what's possible!",
-    timestamp: new Date()
-  }
 }

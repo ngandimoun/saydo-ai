@@ -43,7 +43,7 @@ export interface VoiceRecording {
   id: string
   userId: string
   durationSeconds: number
-  maxDuration: 360 // 6 minutes in seconds
+  maxDuration: 1800 // 30 minutes in seconds
   audioUrl?: string // Supabase Storage URL
   transcription?: string
   contextChainId?: string // Links related recordings
@@ -189,6 +189,7 @@ export interface Task {
 /**
  * Reminder
  * Time-based reminders with notification support.
+ * Enhanced with smart features: AI tagging, priority, and type classification.
  */
 export interface Reminder {
   id: string
@@ -201,6 +202,10 @@ export interface Reminder {
   isCompleted: boolean
   isSnoozed: boolean
   snoozeUntil?: Date
+  tags?: string[] // AI-generated tags for categorization
+  priority?: 'urgent' | 'high' | 'medium' | 'low' // Priority level
+  type?: 'task' | 'todo' | 'reminder' // Item type classification
+  sourceRecordingId?: string // ID of voice recording if extracted from voice
   createdAt: Date
 }
 

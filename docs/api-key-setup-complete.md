@@ -1,17 +1,19 @@
 # API Key Setup - Complete ✅
 
+> **🔒 Security Note**: Never commit API keys to git. The `.env.local` file is already in `.gitignore` to prevent accidental commits. Always use environment variables or secure secret management systems.
+
 ## ✅ What's Been Configured
 
 ### 1. Client-Side Configuration ✅
 - **File**: `.env.local`
 - **Variable**: `NEXT_PUBLIC_OPENWEATHERMAP_API_KEY`
-- **Value**: `b3251fdc5670a0b224c2c5eb410a2504`
+- **Value**: Set to your OpenWeather API key (stored in `.env.local`, not committed to git)
 - **Status**: ✅ Configured
 
 ### 2. Edge Function Secret ✅
 - **Location**: Supabase Dashboard → Settings → Edge Functions → Secrets
 - **Name**: `OPENWEATHERMAP_API_KEY`
-- **Value**: `b3251fdc5670a0b224c2c5eb410a2504`
+- **Value**: Set to your OpenWeather API key (accessed via `Deno.env.get('OPENWEATHERMAP_API_KEY')`)
 - **Status**: ✅ Manually configured
 
 ### 3. Vault Secret ✅
@@ -81,4 +83,5 @@ All infrastructure is now configured:
 - ✅ Code integrated
 
 The Saydo infrastructure foundation is **100% complete** and ready for use!
+
 

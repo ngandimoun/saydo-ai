@@ -16,6 +16,8 @@ export type RealtimeTable =
   | 'tasks'
   | 'voice_recordings'
   | 'health_status'
+  | 'health_notes'
+  | 'reminders'
 
 export interface RealtimeSubscriptionOptions {
   table: RealtimeTable

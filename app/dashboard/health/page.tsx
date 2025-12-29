@@ -1,18 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, Upload, FileText, ChevronRight, Sparkles, Activity, Droplets, Brain, Zap } from "lucide-react"
-import { 
-  getMockHealthDocuments,
-  getMockHealthInsights,
-  getMockHealthRecommendations,
-  getMockBiologicalProfile,
-  getMockHealthStatus,
-  getMockProactiveInterventions,
-  getMockMealPlan,
-  getMockFoodAnalysis
-} from "@/lib/dashboard/mock-data"
 import type { 
   HealthDocument, 
   HealthInsight, 
@@ -20,7 +11,8 @@ import type {
   ProactiveIntervention,
   MealPlan,
   FoodAnalysis,
-  HealthStatus
+  HealthStatus,
+  BiologicalProfile
 } from "@/lib/dashboard/types"
 import { BiologicalTwinDashboard } from "@/components/dashboard/health/biological-twin-dashboard"
 import { InterventionList } from "@/components/dashboard/health/intervention-list"
@@ -30,12 +22,28 @@ import { RecommendationCard } from "@/components/dashboard/health/recommendation
 import { MealPlanComponent } from "@/components/dashboard/health/meal-plan"
 import { FoodScanner } from "@/components/dashboard/health/food-scanner"
 import { FoodAnalysisModal } from "@/components/dashboard/health/food-analysis-modal"
-import { ChatWidget } from "@/components/dashboard/chat"
+
+// Dynamically import ChatWidget and modals to reduce initial bundle size
+const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
+  ssr: false,
+  loading: () => null
+})
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
 import { createClient } from "@/lib/supabase"
 import { useInterventionsRealtime, useHealthStatusRealtime } from "@/hooks/use-realtime"
 import { logger } from "@/lib/logger"
+import {
+  useHealthStatus,
+  useBiologicalProfile,
+  useInterventions,
+  useHealthDocuments,
+  useHealthInsights,
+  useHealthRecommendations,
+  useMealPlan,
+  useBiologicalAge,
+  useInvalidateHealthData
+} from "@/hooks/queries"
 
 /**
  * Health Hub Page - Airbnb-Inspired
@@ -70,17 +78,27 @@ const itemVariants = {
 }
 
 export default function HealthPage() {
-  const [documents, setDocuments] = useState<HealthDocument[]>([])
-  const [insights, setInsights] = useState<HealthInsight[]>([])
-  const [recommendations, setRecommendations] = useState<HealthRecommendation[]>([])
-  const [interventions, setInterventions] = useState<ProactiveIntervention[]>([])
-  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null)
-  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null)
   const [foodAnalysis, setFoodAnalysis] = useState<FoodAnalysis | null>(null)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
+
+  // Use query hooks for cached data
+  const { data: healthStatus, isLoading: statusLoading } = useHealthStatus()
+  const { data: biologicalProfile, isLoading: profileLoading } = useBiologicalProfile()
+  const { data: interventions = [], isLoading: interventionsLoading } = useInterventions()
+  const { data: documents = [], isLoading: documentsLoading } = useHealthDocuments()
+  const { data: insights = [], isLoading: insightsLoading } = useHealthInsights()
+  const { data: recommendations = [], isLoading: recommendationsLoading } = useHealthRecommendations()
+  const { data: mealPlan, isLoading: mealPlanLoading } = useMealPlan()
+  const { data: ageData, isLoading: ageLoading } = useBiologicalAge()
+
+  const isLoading = statusLoading || profileLoading || interventionsLoading || 
+                    documentsLoading || insightsLoading || recommendationsLoading || 
+                    mealPlanLoading || ageLoading
+
+  const biologicalAge = ageData?.biological ?? null
+  const chronologicalAge = ageData?.chronological ?? null
 
   // Get user ID for realtime subscriptions
   useEffect(() => {
@@ -94,170 +112,14 @@ export default function HealthPage() {
     getUserId()
   }, [])
 
-  // Load initial data
-  useEffect(() => {
-    const loadData = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        setIsLoading(false)
-        return
-      }
+  // Subscribe to realtime updates and invalidate queries
+  const invalidateHealthData = useInvalidateHealthData()
 
-      try {
-        // Load health status
-        const { data: status } = await supabase
-          .from('health_status')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('last_updated', { ascending: false })
-          .limit(1)
-          .single()
-
-        if (status) {
-          setHealthStatus({
-            userId: status.user_id,
-            energy: status.energy,
-            stress: status.stress,
-            recovery: status.recovery,
-            lastUpdated: new Date(status.last_updated),
-            source: status.source as HealthStatus['source'],
-          })
-        } else {
-          setHealthStatus(getMockHealthStatus())
-        }
-
-        // Load proactive interventions
-        const { data: interventionsData } = await supabase
-          .from('proactive_interventions')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('is_dismissed', false)
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        if (interventionsData) {
-          setInterventions(interventionsData.map(i => ({
-            id: i.id,
-            userId: i.user_id,
-            type: i.type as ProactiveIntervention['type'],
-            title: i.title,
-            description: i.description,
-            urgencyLevel: i.urgency_level as ProactiveIntervention['urgencyLevel'],
-            category: i.category as ProactiveIntervention['category'],
-            context: i.context,
-            biologicalReason: i.biological_reason,
-            actionItems: i.action_items || [],
-            dismissible: i.dismissible,
-            validUntil: i.valid_until ? new Date(i.valid_until) : undefined,
-            createdAt: new Date(i.created_at),
-            isDismissed: i.is_dismissed,
-          })))
-        } else {
-          setInterventions(getMockProactiveInterventions())
-        }
-
-        // Load health documents
-        const { data: docs } = await supabase
-          .from('health_documents')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('uploaded_at', { ascending: false })
-          .limit(10)
-
-        if (docs) {
-          setDocuments(docs.map(d => ({
-            id: d.id,
-            userId: d.user_id,
-            fileName: d.file_name,
-            fileType: d.file_type,
-            fileUrl: d.file_url,
-            documentType: d.document_type as HealthDocument['documentType'],
-            status: d.status as HealthDocument['status'],
-            extractedData: d.extracted_data,
-            uploadedAt: new Date(d.uploaded_at),
-            analyzedAt: d.analyzed_at ? new Date(d.analyzed_at) : undefined,
-          })))
-        } else {
-          setDocuments(getMockHealthDocuments())
-        }
-
-        // Load insights
-        const { data: insightsData } = await supabase
-          .from('health_insights')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('priority', { ascending: true })
-          .limit(10)
-
-        if (insightsData) {
-          setInsights(insightsData.map(i => ({
-            id: i.id,
-            userId: i.user_id,
-            category: i.category as HealthInsight['category'],
-            title: i.title,
-            description: i.description,
-            iconName: i.icon_name,
-            color: i.color,
-            priority: i.priority,
-            sourceDocumentId: i.source_document_id,
-            createdAt: new Date(i.created_at),
-            validUntil: i.valid_until ? new Date(i.valid_until) : undefined,
-          })))
-        } else {
-          setInsights(getMockHealthInsights())
-        }
-
-        // Load recommendations
-        const { data: recs } = await supabase
-          .from('health_recommendations')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        if (recs) {
-          setRecommendations(recs.map(r => ({
-            id: r.id,
-            userId: r.user_id,
-            type: r.type as HealthRecommendation['type'],
-            title: r.title,
-            description: r.description,
-            reason: r.reason,
-            imageUrl: r.image_url,
-            timing: r.timing,
-            frequency: r.frequency,
-            createdAt: new Date(r.created_at),
-          })))
-        } else {
-          setRecommendations(getMockHealthRecommendations())
-        }
-
-        // Meal plan and food analysis still use mock for now
-        setMealPlan(getMockMealPlan())
-      } catch (error) {
-        logger.error('Failed to load health data', { error })
-        // Fallback to mock data
-        setHealthStatus(getMockHealthStatus())
-        setInterventions(getMockProactiveInterventions())
-        setDocuments(getMockHealthDocuments())
-        setInsights(getMockHealthInsights())
-        setRecommendations(getMockHealthRecommendations())
-        setMealPlan(getMockMealPlan())
-      }
-
-      setIsLoading(false)
-    }
-    loadData()
-  }, [])
-
-  // Subscribe to realtime updates
   useInterventionsRealtime(
     userId || '',
     (intervention) => {
       logger.info('New intervention received', { intervention })
-      setInterventions(prev => [intervention as ProactiveIntervention, ...prev])
+      invalidateHealthData()
     },
     !!userId
   )
@@ -266,7 +128,7 @@ export default function HealthPage() {
     userId || '',
     (status) => {
       logger.info('Health status updated', { status })
-      setHealthStatus(status as HealthStatus)
+      invalidateHealthData()
     },
     !!userId
   )
@@ -296,8 +158,19 @@ export default function HealthPage() {
     ? Math.floor((Date.now() - documents[0].analyzedAt.getTime()) / (1000 * 60 * 60 * 24))
     : undefined
 
-  const biologicalProfile = getMockBiologicalProfile()
-  const currentHealthStatus = healthStatus || getMockHealthStatus()
+  const currentHealthStatus = healthStatus ?? {
+    userId: '',
+    energy: 70,
+    stress: 30,
+    recovery: 65,
+    lastUpdated: new Date(),
+    source: 'manual' as const,
+  }
+
+  const currentBiologicalProfile = biologicalProfile ?? {
+    userId: '',
+    allergies: [],
+  }
 
   // Determine ambient background based on overall health
   const healthScore = (currentHealthStatus.energy + (100 - currentHealthStatus.stress) + currentHealthStatus.recovery) / 3
@@ -345,8 +218,8 @@ export default function HealthPage() {
             <FoodScanner
               variant="button"
               onAnalysisComplete={(analysis) => {
-                const mockAnalysis = getMockFoodAnalysis('', analysis.identifiedFood?.name || 'Unknown')
-                setFoodAnalysis(mockAnalysis)
+                // Use the real analysis from the food scanner
+                setFoodAnalysis(analysis as FoodAnalysis)
                 setIsAnalysisModalOpen(true)
               }}
             />
@@ -399,10 +272,10 @@ export default function HealthPage() {
         {/* Biological Twin Dashboard */}
         <motion.div variants={itemVariants}>
           <BiologicalTwinDashboard
-            biologicalProfile={biologicalProfile}
+            biologicalProfile={currentBiologicalProfile}
             healthStatus={currentHealthStatus}
-            biologicalAge={36}
-            chronologicalAge={35}
+            biologicalAge={biologicalAge ?? undefined}
+            chronologicalAge={chronologicalAge ?? undefined}
             daysSinceLastLab={daysSinceLastLab}
             activeInterventionsCount={interventions.filter(i => !i.isDismissed).length}
           />

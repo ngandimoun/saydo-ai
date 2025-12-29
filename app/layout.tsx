@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Outfit, Plus_Jakarta_Sans, Playfair_Display, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GSAPProvider } from "@/lib/gsap-provider";
-import { LocationUpdaterProvider } from "@/components/location-updater-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 import "./globals.css";
 
 // Display font - Modern, friendly headlines
@@ -93,11 +93,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <GSAPProvider>
-            <LocationUpdaterProvider>
+          <QueryProvider>
+            <GSAPProvider>
               {children}
-            </LocationUpdaterProvider>
-          </GSAPProvider>
+            </GSAPProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

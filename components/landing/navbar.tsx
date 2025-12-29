@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { gsap } from "gsap"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { createClient } from "@/lib/supabase"
@@ -11,6 +12,7 @@ import { LogOut, User as UserIcon } from "lucide-react"
 import { prefersReducedMotion } from "@/lib/animation-config"
 
 export const Navbar = () => {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [scrolled, setScrolled] = useState(false)
@@ -92,6 +94,10 @@ export const Navbar = () => {
     await supabase.auth.signOut()
   }
 
+  const handleNavigateToDashboard = () => {
+    router.push('/dashboard')
+  }
+
   return (
     <motion.nav 
       initial={{ y: -20, opacity: 0 }}
@@ -161,7 +167,13 @@ export const Navbar = () => {
               exit={{ opacity: 0, x: -20 }}
               className="flex items-center gap-1 sm:gap-2"
             >
-              <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
+              <motion.button
+                onClick={handleNavigateToDashboard}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors rounded-md px-1 py-1 -ml-1"
+                aria-label="Go to dashboard"
+              >
                 <motion.div
                   whileHover={{ scale: 1.1 }}
                   className="flex-shrink-0"
@@ -171,7 +183,7 @@ export const Navbar = () => {
                 <span className="hidden sm:inline truncate max-w-[100px]">
                   {user.email?.split("@")[0] || "User"}
                 </span>
-              </div>
+              </motion.button>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   variant="ghost"

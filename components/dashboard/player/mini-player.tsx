@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Play, Pause, X, Music2 } from "lucide-react"
+import { Play, Pause, X, Music2, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -33,6 +33,7 @@ interface MiniPlayerProps {
   }
   isPlaying: boolean
   currentTime: number
+  error?: string | null
   onPlay: () => void
   onPause: () => void
   onSeek: (time: number) => void
@@ -44,12 +45,14 @@ export function MiniPlayer({
   track,
   isPlaying,
   currentTime,
+  error,
   onPlay,
   onPause,
   onSeek,
   onClose,
   onExpand
 }: MiniPlayerProps) {
+  const hasError = !!error
   const audioRef = useRef<HTMLAudioElement>(null)
   const [localProgress, setLocalProgress] = useState(0)
 
@@ -125,9 +128,11 @@ export function MiniPlayer({
     >
       <div className={cn(
         // Gradient background for better visibility
-        "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600",
+        hasError 
+          ? "bg-gradient-to-r from-slate-600 via-slate-500 to-slate-600"
+          : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600",
         "rounded-2xl",
-        "shadow-xl shadow-purple-500/30",
+        hasError ? "shadow-xl shadow-slate-500/30" : "shadow-xl shadow-purple-500/30",
         "overflow-hidden"
       )}>
         {/* Hidden audio element */}
@@ -157,9 +162,14 @@ export function MiniPlayer({
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
             aria-label="Expand player"
           >
-            {/* Album art placeholder with animated waveform */}
-            <div className="relative w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-              {isPlaying ? (
+            {/* Album art placeholder with animated waveform or error icon */}
+            <div className={cn(
+              "relative w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0",
+              hasError ? "bg-red-500/30" : "bg-white/20"
+            )}>
+              {hasError ? (
+                <AlertCircle size={18} className="text-red-200" />
+              ) : isPlaying ? (
                 <div className="flex items-end gap-0.5 h-5">
                   {[...Array(4)].map((_, i) => (
                     <motion.div
@@ -187,11 +197,15 @@ export function MiniPlayer({
               <p className="text-sm font-medium text-white truncate">
                 {track.title}
               </p>
-              {track.narrator && (
+              {hasError ? (
+                <p className="text-xs text-red-200 truncate">
+                  {error}
+                </p>
+              ) : track.narrator ? (
                 <p className="text-xs text-white/70 truncate">
                   {track.narrator}
                 </p>
-              )}
+              ) : null}
             </div>
           </button>
 
@@ -204,19 +218,24 @@ export function MiniPlayer({
           <div className="flex items-center gap-1">
             {/* Play/Pause */}
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={isPlaying ? onPause : onPlay}
+              whileHover={hasError ? {} : { scale: 1.1 }}
+              whileTap={hasError ? {} : { scale: 0.95 }}
+              onClick={hasError ? undefined : (isPlaying ? onPause : onPlay)}
+              disabled={hasError}
               className={cn(
                 "w-10 h-10 rounded-full",
                 "flex items-center justify-center",
-                "bg-white text-purple-600",
+                hasError 
+                  ? "bg-white/50 text-slate-400 cursor-not-allowed"
+                  : "bg-white text-purple-600",
                 "shadow-lg shadow-black/20",
                 "touch-manipulation"
               )}
-              aria-label={isPlaying ? "Pause" : "Play"}
+              aria-label={hasError ? "Audio unavailable" : (isPlaying ? "Pause" : "Play")}
             >
-              {isPlaying ? (
+              {hasError ? (
+                <AlertCircle size={18} className="text-slate-400" />
+              ) : isPlaying ? (
                 <Pause size={18} className="text-purple-600" />
               ) : (
                 <Play size={18} className="ml-0.5 text-purple-600" />

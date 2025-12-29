@@ -1,20 +1,32 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Briefcase, TrendingUp, Clock, FileText, Sparkles, Calendar, CheckCircle2, ArrowRight } from "lucide-react"
 import { FileVault } from "@/components/dashboard/pro/file-vault"
 import { AIOutputs } from "@/components/dashboard/pro/ai-outputs"
 import { DailySummary } from "@/components/dashboard/pro/daily-summary"
-import { ChatWidget } from "@/components/dashboard/chat"
-import { 
-  getMockWorkFiles, 
-  getMockAIDocuments, 
-  getMockEndOfDaySummary 
-} from "@/lib/dashboard/mock-data"
-import type { WorkFile, AIDocument, EndOfDaySummary } from "@/lib/dashboard/types"
+
+// Dynamically import ChatWidget to reduce initial bundle size
+const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
+  ssr: false,
+  loading: () => null
+})
+import type { WorkFile, AIDocument, EndOfDaySummary, Reminder } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
+import { createClient } from "@/lib/supabase"
+import { logger } from "@/lib/logger"
+import {
+  useWorkFiles,
+  useAIDocuments,
+  useEndOfDaySummary,
+  useProductivityStats,
+  useInvalidateProData,
+  useTasks,
+  useReminders
+} from "@/hooks/queries"
 
 /**
  * Pro Life Tab Page - Airbnb-Inspired
@@ -47,21 +59,74 @@ const itemVariants = {
 }
 
 export default function ProPage() {
-  const [isLoading, setIsLoading] = useState(true)
-  const [workFiles, setWorkFiles] = useState<WorkFile[]>([])
-  const [aiDocuments, setAIDocuments] = useState<AIDocument[]>([])
-  const [endOfDaySummary, setEndOfDaySummary] = useState<EndOfDaySummary | null>(null)
+  // Use query hooks for cached data
+  const { data: workFiles = [], isLoading: filesLoading } = useWorkFiles()
+  const { data: aiDocuments = [], isLoading: documentsLoading } = useAIDocuments()
+  const { data: endOfDaySummary, isLoading: summaryLoading } = useEndOfDaySummary()
+  const { data: productivityStats = {
+    tasksCompleted: 0,
+    focusTime: '0h 0m',
+    meetings: 0,
+    aiAssists: 0,
+  }, isLoading: statsLoading } = useProductivityStats()
+  const { data: tasks = [] } = useTasks({ includeCompleted: false, limit: 5 })
+  const { data: reminders = [] } = useReminders({ includeCompleted: false, limit: 5 })
+  const [upcomingReminder, setUpcomingReminder] = useState<Reminder | null>(null)
 
+  // Find next upcoming reminder
   useEffect(() => {
-    const loadData = async () => {
-      await new Promise(resolve => setTimeout(resolve, 300))
-      setWorkFiles(getMockWorkFiles())
-      setAIDocuments(getMockAIDocuments())
-      setEndOfDaySummary(getMockEndOfDaySummary())
-      setIsLoading(false)
+    const now = new Date()
+    const upcoming = reminders
+      .filter(r => new Date(r.reminderTime) > now)
+      .sort((a, b) => new Date(a.reminderTime).getTime() - new Date(b.reminderTime).getTime())[0]
+    setUpcomingReminder(upcoming || null)
+  }, [reminders])
+
+  const isLoading = filesLoading || documentsLoading || summaryLoading || statsLoading
+
+  // Generate dynamic AI summary
+  const generateAISummary = () => {
+    if (endOfDaySummary) {
+      const achievements = endOfDaySummary.keyAchievements?.length || 0
+      const pending = endOfDaySummary.pendingItems?.length || 0
+      return {
+        text: achievements > 0 
+          ? `Great progress today! ${achievements} key achievement${achievements > 1 ? 's' : ''} completed. ${pending > 0 ? `${pending} item${pending > 1 ? 's' : ''} still pending.` : 'All items completed!'}`
+          : productivityStats.tasksCompleted > 0
+          ? `You've completed ${productivityStats.tasksCompleted} task${productivityStats.tasksCompleted > 1 ? 's' : ''} today. Keep up the momentum!`
+          : "Ready to make today productive? Let's get started!",
+        hasUpcoming: upcomingReminder !== null
+      }
     }
-    loadData()
-  }, [])
+    
+    if (productivityStats.tasksCompleted > 0) {
+      return {
+        text: `You've been crushing it today! ${productivityStats.tasksCompleted} task${productivityStats.tasksCompleted > 1 ? 's' : ''} completed with ${productivityStats.focusTime} of focused work.`,
+        hasUpcoming: upcomingReminder !== null
+      }
+    }
+    
+    if (upcomingReminder) {
+      const reminderTime = new Date(upcomingReminder.reminderTime)
+      const now = new Date()
+      const diffMs = reminderTime.getTime() - now.getTime()
+      const diffMins = Math.floor(diffMs / 60000)
+      
+      if (diffMins < 60) {
+        return {
+          text: `You have a reminder coming up in ${diffMins} minute${diffMins !== 1 ? 's' : ''}: ${upcomingReminder.title}`,
+          hasUpcoming: true
+        }
+      }
+    }
+    
+    return {
+      text: "Record a voice note to extract tasks and reminders automatically.",
+      hasUpcoming: false
+    }
+  }
+
+  const aiSummary = generateAISummary()
 
   if (isLoading) {
     return (
@@ -81,14 +146,6 @@ export default function ProPage() {
         </motion.div>
       </div>
     )
-  }
-
-  // Mock productivity stats
-  const productivityStats = {
-    tasksCompleted: 7,
-    focusTime: '3h 45m',
-    meetings: 2,
-    aiAssists: 12,
   }
 
   return (
@@ -190,8 +247,13 @@ export default function ProPage() {
               </div>
               
               <p className="saydo-body text-white text-sm leading-relaxed mb-4">
-                You've been crushing it today! {productivityStats.tasksCompleted} tasks completed with {productivityStats.focusTime} of focused work. 
-                Your next meeting is in 45 minutes - I've prepared briefing notes.
+                {aiSummary.text}
+                {aiSummary.hasUpcoming && upcomingReminder && (
+                  <span className="block mt-2 text-white/80">
+                    {upcomingReminder.priority === 'urgent' && '⚠️ '}
+                    Next: {upcomingReminder.title}
+                  </span>
+                )}
               </p>
               
               <motion.button

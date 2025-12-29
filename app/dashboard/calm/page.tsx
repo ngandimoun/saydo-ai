@@ -1,18 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Moon, Search, Play, Sparkles, Clock, User, Pause } from "lucide-react"
-import { getMockAudioContent } from "@/lib/dashboard/mock-data"
 import type { AudioContent } from "@/lib/dashboard/types"
 import { formatDuration } from "@/lib/dashboard/time-utils"
-import { ChatWidget } from "@/components/dashboard/chat"
+
+// Dynamically import ChatWidget to reduce initial bundle size
+const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
+  ssr: false,
+  loading: () => null
+})
 import { cn } from "@/lib/utils"
 import { useAudioPlayer } from "@/components/dashboard/dashboard-layout-client"
 import { springs, staggerContainer, fadeInUp } from "@/lib/motion-system"
-import { getCalmAudioManager } from "@/lib/calm-audio"
-import { getAudioStreamer } from "@/lib/audio-streamer"
 import { logger } from "@/lib/logger"
+import { useCalmAudio } from "@/hooks/queries"
 
 /**
  * Calm Zone Tab Page - Light/Dark Mode Support
@@ -55,41 +59,9 @@ export default function CalmPage() {
   const audioPlayer = useAudioPlayer()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
-  const [audioContent, setAudioContent] = useState<AudioContent[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const manager = getCalmAudioManager()
-        const streamer = getAudioStreamer()
-        
-        // Load audio content from database
-        const content = await manager.getAudioContent(activeCategory === 'all' ? undefined : activeCategory)
-        
-        // Get streaming URLs for each audio file
-        const contentWithUrls = await Promise.all(
-          content.map(async (item) => {
-            try {
-              const streamUrl = await manager.getAudioStreamUrl(item)
-              return { ...item, audioUrl: streamUrl }
-            } catch (error) {
-              logger.warn('Failed to get audio stream URL', { error, audioId: item.id })
-              return item // Fallback to original URL
-            }
-          })
-        )
-        
-        setAudioContent(contentWithUrls.length > 0 ? contentWithUrls : getMockAudioContent())
-      } catch (error) {
-        logger.error('Failed to load audio content', { error })
-        // Fallback to mock data
-        setAudioContent(getMockAudioContent())
-      }
-      setIsLoading(false)
-    }
-    loadData()
-  }, [activeCategory])
+  
+  // Use query hook for cached audio content
+  const { data: audioContent = [], isLoading } = useCalmAudio({ category: activeCategory })
 
   const filteredContent = audioContent.filter(content => {
     const matchesSearch = content.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

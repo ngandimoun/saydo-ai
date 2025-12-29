@@ -4,13 +4,14 @@ import { useState, createContext, useContext, useCallback, useEffect, useRef } f
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { LanguageProvider } from "@/lib/language-context"
+import { LocationUpdaterProvider } from "@/components/location-updater-provider"
 import { BottomNav } from "@/components/dashboard/navigation/bottom-nav"
 import { VoiceFab } from "@/components/dashboard/navigation/voice-fab"
 import { VoiceRecorderModal } from "@/components/dashboard/voice-recorder-modal"
 import { MiniPlayer } from "@/components/dashboard/player/mini-player"
 import { FullPlayer, type FullPlayerTrack } from "@/components/dashboard/player/full-player"
 import { springs } from "@/lib/motion-system"
-import { getAudioPlayer } from "@/lib/audio-player"
+import { getAudioPlayer, isMockAudioUrl } from "@/lib/audio-player"
 import { logger } from "@/lib/logger"
 
 /**
@@ -43,12 +44,14 @@ interface AudioPlayerState {
   currentTrack: AudioTrack | null
   playlist: AudioTrack[]
   currentTime: number
+  audioError: string | null
   // Basic controls
   setTrack: (track: AudioTrack) => void
   play: () => void
   pause: () => void
   seek: (time: number) => void
   close: () => void
+  clearError: () => void
   // Full player controls
   openFullPlayer: (track: AudioTrack, playlist?: AudioTrack[]) => void
   closeFullPlayer: () => void
@@ -114,6 +117,7 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
   const [playlist, setPlaylist] = useState<AudioTrack[]>([])
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [audioError, setAudioError] = useState<string | null>(null)
 
   // Initialize audio player
   useEffect(() => {
@@ -122,7 +126,10 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
     audioPlayerRef.current = getAudioPlayer()
 
     audioPlayerRef.current.setCallbacks({
-      onPlay: () => setIsPlaying(true),
+      onPlay: () => {
+        setIsPlaying(true)
+        setAudioError(null)
+      },
       onPause: () => setIsPlaying(false),
       onEnded: () => {
         setIsPlaying(false)
@@ -133,7 +140,17 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
       onTimeUpdate: (time) => setCurrentTime(time),
       onLoadedMetadata: (dur) => setDuration(dur),
       onError: (error) => {
-        logger.error('Audio player error', { error })
+        // Check if this is a mock URL error - handle gracefully without error spam
+        const isMock = (error as any).isMockUrl
+        if (isMock) {
+          // This is expected for placeholder content - show user-friendly message
+          setAudioError('This audio is not yet available')
+          logger.info('Audio unavailable - placeholder content', { url: (error as any).url })
+        } else {
+          // Real error - log it
+          logger.error('Audio player error', { error })
+          setAudioError('Unable to play audio')
+        }
         setIsPlaying(false)
       },
     })
@@ -150,11 +167,31 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
   useEffect(() => {
     if (!audioPlayerRef.current || !currentTrack) return
 
-    audioPlayerRef.current.setSource(currentTrack.audioUrl)
+    // Check if URL is a mock/placeholder before setting source
+    if (isMockAudioUrl(currentTrack.audioUrl)) {
+      setAudioError('This audio is not yet available')
+      setIsPlaying(false)
+      return
+    }
+
+    setAudioError(null)
+    const isValid = audioPlayerRef.current.setSource(currentTrack.audioUrl)
+    
+    if (!isValid) {
+      setAudioError('This audio is not yet available')
+      setIsPlaying(false)
+      return
+    }
     
     if (isPlaying) {
       audioPlayerRef.current.play().catch((error) => {
-        logger.error('Failed to play audio', { error })
+        const isMock = (error as any).isMockUrl
+        if (isMock) {
+          setAudioError('This audio is not yet available')
+        } else {
+          logger.error('Failed to play audio', { error })
+          setAudioError('Unable to play audio')
+        }
         setIsPlaying(false)
       })
     }
@@ -200,8 +237,16 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
       setPlaylist(newPlaylist)
     }
     setCurrentTime(0)
-    setIsPlaying(true)
+    setAudioError(null)
     setIsFullPlayerOpen(true)
+    
+    // Check if URL is valid before attempting to play
+    if (isMockAudioUrl(track.audioUrl)) {
+      setAudioError('This audio is not yet available')
+      setIsPlaying(false)
+    } else {
+      setIsPlaying(true)
+    }
   }, [])
 
   // Close full player (show mini player if track is still playing)
@@ -215,18 +260,54 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
     currentTrack,
     playlist,
     currentTime,
+    audioError,
     setTrack: (track) => {
       setCurrentTrack(track)
       setCurrentTime(0)
+      setAudioError(null)
+      
+      // Check for mock URLs before attempting to play
+      if (isMockAudioUrl(track.audioUrl)) {
+        setAudioError('This audio is not yet available')
+        setIsPlaying(false)
+        return
+      }
+      
       if (audioPlayerRef.current) {
-        audioPlayerRef.current.setSource(track.audioUrl)
-        audioPlayerRef.current.play().catch(() => setIsPlaying(false))
+        const isValid = audioPlayerRef.current.setSource(track.audioUrl)
+        if (!isValid) {
+          setAudioError('This audio is not yet available')
+          setIsPlaying(false)
+          return
+        }
+        audioPlayerRef.current.play().catch((error) => {
+          if ((error as any).isMockUrl) {
+            setAudioError('This audio is not yet available')
+          } else {
+            setAudioError('Unable to play audio')
+          }
+          setIsPlaying(false)
+        })
       }
       setIsPlaying(true)
     },
     play: () => {
+      // Check if current track has a valid URL
+      if (currentTrack && isMockAudioUrl(currentTrack.audioUrl)) {
+        setAudioError('This audio is not yet available')
+        setIsPlaying(false)
+        return
+      }
+      
       if (audioPlayerRef.current) {
-        audioPlayerRef.current.play().catch(() => setIsPlaying(false))
+        audioPlayerRef.current.play().catch((error) => {
+          if ((error as any).isMockUrl) {
+            setAudioError('This audio is not yet available')
+          } else {
+            setAudioError('Unable to play audio')
+          }
+          setIsPlaying(false)
+        })
       }
       setIsPlaying(true)
     },
@@ -245,6 +326,10 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
       setCurrentTime(0)
       setPlaylist([])
       setIsFullPlayerOpen(false)
+      setAudioError(null)
+    },
+    clearError: () => {
+      setAudioError(null)
     },
     openFullPlayer,
     closeFullPlayer,
@@ -281,87 +366,91 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
 
   return (
     <LanguageProvider>
-      <AudioPlayerContext.Provider value={audioPlayerValue}>
-        <div className="min-h-screen bg-background overflow-x-hidden">
-          {/* Main content area with page transitions */}
-          <main className="pb-28 min-h-screen">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={pathname}
-                initial="initial"
-                animate="enter"
-                exit="exit"
-                variants={pageVariants}
-                className="min-h-screen"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
-          </main>
+      <LocationUpdaterProvider>
+        <AudioPlayerContext.Provider value={audioPlayerValue}>
+          <div className="min-h-screen bg-background overflow-x-hidden">
+            {/* Main content area with page transitions */}
+            <main className="pb-28 min-h-screen">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={pathname}
+                  initial="initial"
+                  animate="enter"
+                  exit="exit"
+                  variants={pageVariants}
+                  className="min-h-screen"
+                >
+                  {children}
+                </motion.div>
+              </AnimatePresence>
+            </main>
 
-          {/* Mini audio player - shown when NOT on full player and track exists */}
-          <AnimatePresence>
-            {currentTrack && !isFullPlayerOpen && (
-              <motion.div
-                initial={{ y: 100, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 100, opacity: 0 }}
-                transition={springs.gentle}
-              >
-                <MiniPlayer
+            {/* Mini audio player - shown when NOT on full player and track exists */}
+            <AnimatePresence>
+              {currentTrack && !isFullPlayerOpen && (
+                <motion.div
+                  initial={{ y: 100, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 100, opacity: 0 }}
+                  transition={springs.gentle}
+                >
+                  <MiniPlayer
+                    track={currentTrack}
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    error={audioError}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onSeek={(time) => setCurrentTime(time)}
+                    onClose={() => audioPlayerValue.close()}
+                    onExpand={() => setIsFullPlayerOpen(true)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Full-screen audio player - Spotify-like */}
+            <AnimatePresence>
+              {isFullPlayerOpen && currentTrack && (
+                <FullPlayer
+                  isOpen={isFullPlayerOpen}
                   track={currentTrack}
+                  playlist={playlist}
                   isPlaying={isPlaying}
                   currentTime={currentTime}
+                  error={audioError}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onSeek={(time) => setCurrentTime(time)}
-                  onClose={() => audioPlayerValue.close()}
-                  onExpand={() => setIsFullPlayerOpen(true)}
+                  onClose={closeFullPlayer}
+                  onNext={playNext}
+                  onPrevious={playPrevious}
                 />
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
 
-          {/* Full-screen audio player - Spotify-like */}
-          <AnimatePresence>
-            {isFullPlayerOpen && currentTrack && (
-              <FullPlayer
-                isOpen={isFullPlayerOpen}
-                track={currentTrack}
-                playlist={playlist}
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onSeek={(time) => setCurrentTime(time)}
-                onClose={closeFullPlayer}
-                onNext={playNext}
-                onPrevious={playPrevious}
+            {/* Bottom navigation - hidden when full player is open */}
+            {!isFullPlayerOpen && <BottomNav />}
+
+            {/* Center voice FAB - hidden when full player is open */}
+            {!isFullPlayerOpen && (
+              <VoiceFab 
+                onClick={handleVoiceButtonClick}
+                isRecording={isRecording}
+                isProcessing={isProcessing}
               />
             )}
-          </AnimatePresence>
 
-          {/* Bottom navigation - hidden when full player is open */}
-          {!isFullPlayerOpen && <BottomNav />}
-
-          {/* Center voice FAB - hidden when full player is open */}
-          {!isFullPlayerOpen && (
-            <VoiceFab 
-              onClick={handleVoiceButtonClick}
-              isRecording={isRecording}
-              isProcessing={isProcessing}
+            {/* Voice recorder modal */}
+            <VoiceRecorderModal
+              isOpen={isRecorderOpen}
+              onClose={() => setIsRecorderOpen(false)}
+              onRecordingStart={handleRecordingStart}
+              onRecordingEnd={handleRecordingEnd}
             />
-          )}
-
-          {/* Voice recorder modal */}
-          <VoiceRecorderModal
-            isOpen={isRecorderOpen}
-            onClose={() => setIsRecorderOpen(false)}
-            onRecordingStart={handleRecordingStart}
-            onRecordingEnd={handleRecordingEnd}
-          />
-        </div>
-      </AudioPlayerContext.Provider>
+          </div>
+        </AudioPlayerContext.Provider>
+      </LocationUpdaterProvider>
     </LanguageProvider>
   )
 }

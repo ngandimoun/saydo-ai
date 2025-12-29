@@ -482,7 +482,22 @@ export function getMockReminders(): Reminder[] {
 // ============================================
 
 /**
+ * Mock/placeholder audio URL prefix.
+ * URLs starting with /mock/ are detected by the audio player as placeholder content
+ * and handled gracefully (no error spam, user-friendly "not available" message).
+ * 
+ * To add real audio content:
+ * 1. Upload audio files to Supabase Storage (bucket: 'calm-audio')
+ * 2. Add entries to the 'audio_content' table with valid URLs
+ * 3. The CalmAudioManager will fetch and stream from Supabase
+ */
+const MOCK_AUDIO_PREFIX = '/mock/'
+
+/**
  * Get audio content for Calm Zone.
+ * 
+ * NOTE: These are placeholder entries for UI development.
+ * Audio files do not exist - the player will show "not yet available" message.
  * 
  * TODO (Content):
  * - Integrate with audio content provider
@@ -498,7 +513,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Start your day with positive affirmations and gentle energy.',
       category: 'motivational',
       durationSeconds: 600, // 10 min
-      audioUrl: '/mock/morning-boost.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}morning-boost.mp3`,
       thumbnailUrl: undefined,
       narrator: 'Alex',
       tags: ['morning', 'energy', 'affirmations'],
@@ -512,7 +527,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Drift into restful sleep with this calming bedtime story.',
       category: 'sleep',
       durationSeconds: 1800, // 30 min
-      audioUrl: '/mock/sleep-journey.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}sleep-journey.mp3`,
       narrator: 'Sarah',
       tags: ['sleep', 'story', 'relaxation'],
       isFeatured: true,
@@ -525,7 +540,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Clear your mind and enhance concentration.',
       category: 'meditation',
       durationSeconds: 900, // 15 min
-      audioUrl: '/mock/focus-meditation.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}focus-meditation.mp3`,
       narrator: 'Maya',
       tags: ['focus', 'concentration', 'work'],
       isFeatured: false,
@@ -538,7 +553,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Release tension and find your calm center.',
       category: 'relaxation',
       durationSeconds: 720, // 12 min
-      audioUrl: '/mock/stress-relief.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}stress-relief.mp3`,
       narrator: 'Alex',
       tags: ['stress', 'anxiety', 'calm'],
       isFeatured: false,
@@ -551,7 +566,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Ambient sounds of gentle ocean waves.',
       category: 'relaxation',
       durationSeconds: 3600, // 1 hour
-      audioUrl: '/mock/ocean-waves.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}ocean-waves.mp3`,
       tags: ['ambient', 'nature', 'background'],
       isFeatured: false,
       playCount: 2100,
@@ -563,7 +578,7 @@ export function getMockAudioContent(): AudioContent[] {
       description: 'Motivational insights for entrepreneurs.',
       category: 'motivational',
       durationSeconds: 480, // 8 min
-      audioUrl: '/mock/founders-mindset.mp3',
+      audioUrl: `${MOCK_AUDIO_PREFIX}founders-mindset.mp3`,
       narrator: 'Chris',
       tags: ['business', 'motivation', 'success'],
       isFeatured: false,

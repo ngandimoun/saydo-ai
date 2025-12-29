@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Mic, Square, Pause, Play, Send, Trash2, Sparkles } from "lucide-react"
+import { X, Mic, Square, Send, Trash2, Sparkles, Check, ListTodo, Heart, FileText } from "lucide-react"
 import { formatDuration } from "@/lib/dashboard/time-utils"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useVoiceRecorder, type VoiceProcessingResult } from "@/hooks/use-voice-recorder"
 import { logger } from "@/lib/logger"
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 
 /**
  * Voice Recorder Modal - Airbnb-Inspired
@@ -16,47 +17,62 @@ import { logger } from "@/lib/logger"
  * - Dynamic waveform visualization
  * - Gradient ambient backgrounds
  * - Real-time transcription preview
- * - Processing state with particle effects
- * 
- * Now integrated with real voice recording infrastructure
+ * - AI processing with task extraction
+ * - Results display with extracted items
  */
 
 interface VoiceRecorderModalProps {
   isOpen: boolean
   onClose: () => void
   onRecordingStart?: () => void
-  onRecordingEnd?: () => void
-  maxDuration?: number // in seconds, default 360 (6 min)
+  onRecordingEnd?: (result?: VoiceProcessingResult) => void
+  maxDuration?: number // in seconds, default 1800 (30 min)
 }
 
-type RecordingState = 'idle' | 'recording' | 'paused' | 'processing'
+type RecordingState = 'idle' | 'recording' | 'paused' | 'processing' | 'complete'
 
 export function VoiceRecorderModal({ 
   isOpen, 
   onClose,
   onRecordingStart,
   onRecordingEnd,
-  maxDuration = 360 
+  maxDuration = 1800 
 }: VoiceRecorderModalProps) {
   const [waveformData, setWaveformData] = useState<number[]>(
     Array(40).fill(0).map(() => Math.random() * 0.2 + 0.1)
   )
-  const [transcription, setTranscription] = useState<string>("")
+  const [showResults, setShowResults] = useState(false)
+  const [recordingId, setRecordingId] = useState<string | null>(null)
+  const [editedTranscription, setEditedTranscription] = useState<string>('')
+  const [editedAiSummary, setEditedAiSummary] = useState<string>('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Use real voice recorder hook
+  // Use real voice recorder hook with AI processing
   const {
     isRecording,
     duration,
     isProcessing,
+    processingResult,
     error: recorderError,
     startRecording,
     stopRecording,
   } = useVoiceRecorder({
     maxDuration,
+    autoProcess: true, // Enable AI processing
     onRecordingComplete: (result) => {
       logger.info('Voice recording completed', { result })
-      onRecordingEnd?.()
-      onClose()
+      if (result.processing) {
+        // Store recording ID and initialize edited values
+        setRecordingId(result.recordingId)
+        setEditedTranscription(result.processing.transcription || '')
+        setEditedAiSummary(result.processing.extractedItems?.summary || '')
+        setShowResults(true)
+        onRecordingEnd?.(result.processing)
+      } else {
+        onRecordingEnd?.()
+        onClose()
+      }
     },
     onError: (error) => {
       logger.error('Voice recording error', { error })
@@ -64,7 +80,9 @@ export function VoiceRecorderModal({
   })
 
   // Determine state from recorder
-  const state: RecordingState = isProcessing 
+  const state: RecordingState = showResults
+    ? 'complete'
+    : isProcessing 
     ? 'processing' 
     : isRecording 
     ? 'recording' 
@@ -73,10 +91,27 @@ export function VoiceRecorderModal({
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setTranscription("")
+      setShowResults(false)
       setWaveformData(Array(40).fill(0).map(() => Math.random() * 0.2 + 0.1))
+      setRecordingId(null)
+      setEditedTranscription('')
+      setEditedAiSummary('')
+      setSaveError(null)
+      setIsSaving(false)
     }
   }, [isOpen])
+
+  // Update edited values when processing result changes
+  useEffect(() => {
+    if (processingResult?.success) {
+      if (processingResult.transcription && !editedTranscription) {
+        setEditedTranscription(processingResult.transcription)
+      }
+      if (processingResult.extractedItems?.summary && !editedAiSummary) {
+        setEditedAiSummary(processingResult.extractedItems.summary)
+      }
+    }
+  }, [processingResult, editedTranscription, editedAiSummary])
 
   // Smooth waveform animation when recording
   useEffect(() => {
@@ -95,7 +130,6 @@ export function VoiceRecorderModal({
   useEffect(() => {
     if (recorderError) {
       logger.error('Recording error', { error: recorderError })
-      // Could show a toast notification here
     }
   }, [recorderError])
 
@@ -113,7 +147,6 @@ export function VoiceRecorderModal({
   const sendRecording = useCallback(async () => {
     try {
       await stopRecording()
-      // onRecordingEnd is called by the hook's onRecordingComplete
     } catch (error) {
       logger.error('Failed to stop recording', { error })
     }
@@ -129,9 +162,68 @@ export function VoiceRecorderModal({
     onClose()
   }, [isRecording, stopRecording, onClose])
 
+  // Save changes and close
+  const handleDone = useCallback(async () => {
+    if (!recordingId) {
+      onClose()
+      return
+    }
+
+    // Check if values have changed
+    const transcriptionChanged = editedTranscription.trim() !== (processingResult?.transcription || '').trim()
+    const aiSummaryChanged = editedAiSummary.trim() !== (processingResult?.extractedItems?.summary || '').trim()
+
+    if (!transcriptionChanged && !aiSummaryChanged) {
+      // No changes, just close
+      onClose()
+      return
+    }
+
+    setIsSaving(true)
+    setSaveError(null)
+
+    try {
+      const response = await fetch('/api/voice/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          recordingId,
+          transcription: transcriptionChanged ? editedTranscription.trim() : undefined,
+          aiSummary: aiSummaryChanged ? editedAiSummary.trim() : undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to save changes')
+      }
+
+      logger.info('Changes saved successfully', { recordingId })
+      onClose()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save changes'
+      logger.error('Failed to save changes', { error, recordingId })
+      setSaveError(errorMessage)
+      setIsSaving(false)
+    }
+  }, [recordingId, editedTranscription, editedAiSummary, processingResult, onClose])
+
   // Calculate progress percentage
   const progress = (duration / maxDuration) * 100
   const isNearLimit = progress > 80
+
+  // Count extracted items
+  const extractedCounts = processingResult?.extractedItems ? {
+    tasks: processingResult.extractedItems.tasks.length,
+    reminders: processingResult.extractedItems.reminders.length,
+    healthNotes: processingResult.extractedItems.healthNotes.length,
+    notes: processingResult.extractedItems.generalNotes.length,
+  } : { tasks: 0, reminders: 0, healthNotes: 0, notes: 0 }
+
+  const totalExtracted = extractedCounts.tasks + extractedCounts.reminders + extractedCounts.healthNotes + extractedCounts.notes
 
   return (
     <AnimatePresence>
@@ -153,6 +245,8 @@ export function VoiceRecorderModal({
                     'linear-gradient(180deg, rgba(20, 184, 166, 0.2) 0%, #0C1222 50%, #0C1222 100%)',
                     'linear-gradient(180deg, rgba(13, 148, 136, 0.15) 0%, #0C1222 50%, #0C1222 100%)',
                   ]
+                : state === 'complete'
+                ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, #0C1222 50%, #0C1222 100%)'
                 : 'linear-gradient(180deg, rgba(13, 148, 136, 0.08) 0%, #0C1222 50%, #0C1222 100%)'
             }}
             transition={{ duration: 3, repeat: state === 'recording' ? Infinity : 0 }}
@@ -192,108 +286,216 @@ export function VoiceRecorderModal({
               </motion.button>
               
               <span className="text-sm text-white/60 font-medium">
-                Max {Math.floor(maxDuration / 60)} minutes
+                {state === 'complete' ? 'Processing Complete' : `Max ${Math.floor(maxDuration / 60)} minutes`}
               </span>
               
               <div className="w-10" />
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col items-center justify-center w-full">
-              {/* Timer */}
-              <motion.div
-                key={duration}
-                initial={{ scale: 1.05, opacity: 0.8 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className={cn(
-                  "text-7xl sm:text-8xl font-display font-light tabular-nums mb-6",
-                  isNearLimit ? "text-amber-400" : "text-white"
-                )}
-              >
-                {formatDuration(duration)}
-              </motion.div>
-
-              {/* Waveform Visualization */}
-              <div className="flex items-center justify-center gap-0.5 h-28 mb-6 w-full max-w-sm">
-                {waveformData.map((height, i) => (
-                  <motion.div
-                    key={i}
-                    animate={{
-                      height: `${height * 100}%`,
-                      opacity: state === 'recording' ? 0.8 + height * 0.2 : 0.3,
-                    }}
-                    transition={{
-                      duration: state === 'recording' ? 0.08 : 0.3,
-                      ease: "easeOut"
-                    }}
-                    className={cn(
-                      "w-1 rounded-full",
-                      state === 'recording' 
-                        ? "bg-gradient-to-t from-primary to-teal-400" 
-                        : "bg-white/20"
-                    )}
-                    style={{ minHeight: '4px' }}
-                  />
-                ))}
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full max-w-sm h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+            <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0">
+              {/* Results View */}
+              {state === 'complete' && processingResult?.success && (
                 <motion.div
-                  className={cn(
-                    "h-full rounded-full",
-                    isNearLimit 
-                      ? "bg-gradient-to-r from-amber-500 to-orange-500" 
-                      : "bg-gradient-to-r from-primary to-teal-400"
-                  )}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-sm flex flex-col h-full max-h-full overflow-hidden"
+                >
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-2 -mr-2">
+                  {/* Success Icon */}
+                  <div className="flex justify-center mb-6">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={springs.bouncy}
+                      className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center"
+                    >
+                      <Check size={36} className="text-emerald-400" />
+                    </motion.div>
+                  </div>
 
-              {/* Time remaining */}
-              <p className={cn(
-                "text-sm font-medium",
-                isNearLimit ? "text-amber-400" : "text-white/50"
-              )}>
-                {formatDuration(maxDuration - duration)} remaining
-              </p>
-
-              {/* Status Text */}
-              <motion.p
-                key={state}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-white/60 text-center mt-6 mb-4"
-              >
-                {state === 'idle' && "Tap the button to start recording"}
-                {state === 'recording' && "Listening... speak naturally"}
-                {state === 'paused' && "Recording paused"}
-                {state === 'processing' && "Processing your voice note..."}
-              </motion.p>
-
-              {/* Real-time Transcription Preview */}
-              <AnimatePresence>
-                {transcription && state !== 'processing' && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                    exit={{ opacity: 0, y: -10, height: 0 }}
-                    className="w-full max-w-sm"
-                  >
+                  {/* Transcription */}
+                  {processingResult.transcription && (
                     <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles size={12} className="text-primary" />
-                        <span className="text-xs font-medium text-white/50">Live Transcription</span>
+                      <p className="text-sm text-white/60 mb-2">Transcription</p>
+                      <div className="max-h-[200px] overflow-y-auto">
+                        <textarea
+                          value={editedTranscription}
+                          onChange={(e) => setEditedTranscription(e.target.value)}
+                          className="w-full text-white/90 text-sm leading-relaxed bg-transparent border-none outline-none resize-none focus:ring-0 p-0 min-h-[60px]"
+                          rows={Math.max(3, editedTranscription.split('\n').length)}
+                          placeholder="Transcription will appear here..."
+                        />
                       </div>
-                      <p className="text-sm text-white/80 italic leading-relaxed">
-                        "{transcription}"
-                      </p>
                     </div>
+                  )}
+
+                  {/* Extracted Items Summary */}
+                  {totalExtracted > 0 && (
+                    <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+                      <p className="text-sm text-white/60 mb-3">Extracted Items</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {extractedCounts.tasks > 0 && (
+                          <div className="flex items-center gap-2 text-white/80">
+                            <ListTodo size={16} className="text-primary" />
+                            <span className="text-sm">{extractedCounts.tasks} task{extractedCounts.tasks > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                        {extractedCounts.healthNotes > 0 && (
+                          <div className="flex items-center gap-2 text-white/80">
+                            <Heart size={16} className="text-rose-400" />
+                            <span className="text-sm">{extractedCounts.healthNotes} health note{extractedCounts.healthNotes > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                        {extractedCounts.notes > 0 && (
+                          <div className="flex items-center gap-2 text-white/80">
+                            <FileText size={16} className="text-blue-400" />
+                            <span className="text-sm">{extractedCounts.notes} note{extractedCounts.notes > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  {processingResult.extractedItems?.summary && (
+                    <div className="p-4 bg-primary/10 backdrop-blur-sm rounded-2xl border border-primary/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles size={14} className="text-primary" />
+                        <span className="text-xs font-medium text-primary">AI Summary</span>
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto pr-2 -mr-2">
+                        <MarkdownRenderer 
+                          content={editedAiSummary || "AI Summary will appear here..."}
+                          className="text-white/90"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Message */}
+                  {saveError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 text-sm"
+                    >
+                      {saveError}
+                    </motion.div>
+                  )}
+                  </div>
+
+                  {/* Done Button - Always visible at bottom */}
+                  <div className="flex-shrink-0 pt-4 mt-auto">
+                    <motion.button
+                      whileHover={!isSaving ? { scale: 1.02 } : {}}
+                      whileTap={!isSaving ? { scale: 0.98 } : {}}
+                      onClick={handleDone}
+                      disabled={isSaving}
+                      className={cn(
+                        "w-full py-3 px-6 bg-primary rounded-xl text-white font-medium",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        "flex items-center justify-center gap-2"
+                      )}
+                    >
+                      {isSaving ? (
+                        <>
+                          <motion.div
+                            className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Done</span>
+                      )}
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Recording View */}
+              {state !== 'complete' && (
+                <>
+                  {/* Timer */}
+                  <motion.div
+                    key={duration}
+                    initial={{ scale: 1.05, opacity: 0.8 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className={cn(
+                      "text-7xl sm:text-8xl font-display font-light tabular-nums mb-6",
+                      isNearLimit ? "text-amber-400" : "text-white"
+                    )}
+                  >
+                    {formatDuration(duration)}
                   </motion.div>
-                )}
-              </AnimatePresence>
+
+                  {/* Waveform Visualization */}
+                  <div className="flex items-center justify-center gap-0.5 h-28 mb-6 w-full max-w-sm">
+                    {waveformData.map((height, i) => (
+                      <motion.div
+                        key={i}
+                        animate={{
+                          height: `${height * 100}%`,
+                          opacity: state === 'recording' ? 0.8 + height * 0.2 : 0.3,
+                        }}
+                        transition={{
+                          duration: state === 'recording' ? 0.08 : 0.3,
+                          ease: "easeOut"
+                        }}
+                        className={cn(
+                          "w-1 rounded-full",
+                          state === 'recording' 
+                            ? "bg-gradient-to-t from-primary to-teal-400" 
+                            : "bg-white/20"
+                        )}
+                        style={{ minHeight: '4px' }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Progress Bar */}
+                  {state === 'recording' && (
+                    <>
+                      <div className="w-full max-w-sm h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                        <motion.div
+                          className={cn(
+                            "h-full rounded-full",
+                            isNearLimit 
+                              ? "bg-gradient-to-r from-amber-500 to-orange-500" 
+                              : "bg-gradient-to-r from-primary to-teal-400"
+                          )}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progress}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+
+                      {/* Time remaining */}
+                      <p className={cn(
+                        "text-sm font-medium",
+                        isNearLimit ? "text-amber-400" : "text-white/50"
+                      )}>
+                        {formatDuration(maxDuration - duration)} remaining
+                      </p>
+                    </>
+                  )}
+
+                  {/* Status Text */}
+                  <motion.p
+                    key={state}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-white/60 text-center mt-6 mb-4"
+                  >
+                    {state === 'idle' && "Tap the button to start recording"}
+                    {state === 'recording' && "Listening... speak naturally"}
+                    {state === 'paused' && "Recording paused"}
+                    {state === 'processing' && "Processing your voice note..."}
+                  </motion.p>
+                </>
+              )}
             </div>
 
             {/* Controls */}
@@ -318,7 +520,7 @@ export function VoiceRecorderModal({
                 </motion.div>
               )}
 
-              {(state === 'recording' || state === 'paused') && (
+              {state === 'recording' && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -335,7 +537,7 @@ export function VoiceRecorderModal({
                     <Trash2 size={22} className="text-white/70" />
                   </motion.button>
 
-                  {/* Stop button (recording can't be paused, only stopped) */}
+                  {/* Stop button */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}

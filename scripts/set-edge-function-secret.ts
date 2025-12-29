@@ -16,11 +16,13 @@ config({ path: resolve(process.cwd(), '.env.local') })
 
 const projectRef = 'bjlzeoojhplgjbajfihu'
 const secretName = 'OPENWEATHERMAP_API_KEY'
-const secretValue = process.env.NEXT_PUBLIC_OPENWEATHERMAP_API_KEY || 'b3251fdc5670a0b224c2c5eb410a2504'
+const secretValue = process.env.NEXT_PUBLIC_OPENWEATHERMAP_API_KEY
 
 if (!secretValue) {
   console.error('❌ OPENWEATHERMAP_API_KEY not found in .env.local')
   console.error('   Please ensure NEXT_PUBLIC_OPENWEATHERMAP_API_KEY is set')
+  console.error('   Add it to your .env.local file:')
+  console.error('   NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_api_key_here')
   process.exit(1)
 }
 

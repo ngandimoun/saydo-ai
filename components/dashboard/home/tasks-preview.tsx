@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { springs, staggerContainer, staggerItem } from "@/lib/motion-system"
 import { EmptyState } from "@/components/ui/empty-state"
+import { formatSmartDateTime } from "@/lib/dashboard/time-utils"
+import { useProfile } from "@/hooks/queries"
+import type { Language } from "@/lib/dashboard/label-translations"
+import { sortTasksChronologically } from "@/lib/dashboard/task-sorting"
 
 /**
  * Tasks Preview Section - Airbnb-Inspired
@@ -36,10 +40,13 @@ const priorityConfig = {
 }
 
 export function TasksPreview({ tasks }: TasksPreviewProps) {
-  // Show only first 4 pending tasks
-  const previewTasks = tasks
-    .filter(t => t.status !== 'completed')
-    .slice(0, 4)
+  const { data: userProfile } = useProfile()
+  const userLanguage = (userProfile?.language || 'en') as Language
+  
+  // Filter pending tasks, apply smart sorting, then show only first 4
+  const pendingTasks = tasks.filter(t => t.status !== 'completed')
+  const sortedTasks = sortTasksChronologically(pendingTasks)
+  const previewTasks = sortedTasks.slice(0, 4)
 
   const completedCount = tasks.filter(t => t.status === 'completed').length
 
@@ -138,16 +145,20 @@ export function TasksPreview({ tasks }: TasksPreviewProps) {
                 </div>
 
                 {/* Time indicator */}
-                {task.dueTime && (
-                  <div className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-lg",
-                    "text-xs font-medium",
-                    "bg-muted text-muted-foreground"
-                  )}>
-                    <Clock size={10} />
-                    <span>{task.dueTime}</span>
-                  </div>
-                )}
+                {task.dueDate && (() => {
+                  const dateDisplay = formatSmartDateTime(task.dueDate, task.dueTime, userLanguage)
+                  return dateDisplay ? (
+                    <div className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-lg",
+                      "text-xs font-medium",
+                      "bg-muted",
+                      dateDisplay.color
+                    )}>
+                      <Clock size={10} />
+                      <span>{dateDisplay.text}</span>
+                    </div>
+                  ) : null
+                })()}
 
                 {/* Hover chevron */}
                 <ChevronRight 

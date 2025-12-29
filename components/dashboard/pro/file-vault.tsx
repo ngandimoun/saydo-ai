@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { Upload, File, FileText, Image, Sheet, Presentation, ChevronRight, Loader2 } from "lucide-react"
 import type { WorkFile } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+import { WorkFileUploadModal } from "./work-file-upload"
+import { useInvalidateProData } from "@/hooks/queries/use-pro-data"
 
 /**
  * File Vault Component
@@ -13,7 +15,6 @@ import { toast } from "sonner"
  * Shows recent uploads with thumbnails/icons.
  * 
  * TODO (Backend Integration):
- * - Implement file upload to Supabase Storage
  * - Generate thumbnails for images/PDFs
  * - Add file preview modal
  * - Implement file deletion
@@ -24,11 +25,15 @@ interface FileVaultProps {
 }
 
 export function FileVault({ files }: FileVaultProps) {
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const invalidateProData = useInvalidateProData()
+
   const handleUploadClick = () => {
-    // TODO: Implement actual file upload
-    toast.info("Upload functionality coming soon!", {
-      description: "You'll be able to upload PDFs, images, and documents."
-    })
+    setIsUploadModalOpen(true)
+  }
+
+  const handleUploadComplete = () => {
+    invalidateProData()
   }
 
   const getFileIcon = (type: string) => {
@@ -148,9 +153,17 @@ export function FileVault({ files }: FileVaultProps) {
           <ChevronRight size={14} />
         </button>
       )}
+
+      {/* Upload Modal */}
+      <WorkFileUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUploadComplete={handleUploadComplete}
+      />
     </section>
   )
 }
+
 
 
 

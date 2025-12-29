@@ -129,6 +129,7 @@ function NavTab({ item, isActive }: NavTabProps) {
   return (
     <Link
       href={item.href}
+      prefetch={true}
       className={cn(
         "relative flex flex-col items-center justify-center gap-1",
         "px-5 py-2 min-w-[72px]",

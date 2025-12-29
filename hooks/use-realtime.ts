@@ -107,6 +107,7 @@ export function useVoiceRecordingsRealtime(
   useRealtime({
     table: 'voice_recordings',
     userId,
+    onInsert: onRecordingChange,
     onUpdate: onRecordingChange,
     enabled,
   })
@@ -127,4 +128,39 @@ export function useHealthStatusRealtime(
     enabled,
   })
 }
+
+/**
+ * Hook for subscribing to health notes
+ */
+export function useHealthNotesRealtime(
+  userId: string,
+  onNoteChange: (note: unknown) => void,
+  enabled: boolean = true
+) {
+  useRealtime({
+    table: 'health_notes',
+    userId,
+    onInsert: onNoteChange,
+    onUpdate: onNoteChange,
+    enabled,
+  })
+}
+
+/**
+ * Hook for subscribing to reminders
+ */
+export function useRemindersRealtime(
+  userId: string,
+  onReminderChange: (reminder: unknown) => void,
+  enabled: boolean = true
+) {
+  useRealtime({
+    table: 'reminders',
+    userId,
+    onInsert: onReminderChange,
+    onUpdate: onReminderChange,
+    enabled,
+  })
+}
+
 

@@ -1,10 +1,12 @@
 # Edge Function Secret Verification
 
+> **🔒 Security Note**: Never commit API keys to git. The `.env.local` file is already in `.gitignore` to prevent accidental commits. Always use environment variables or secure secret management systems like Supabase Vault or Edge Function secrets.
+
 ## ✅ What We've Done
 
 ### 1. Secret Stored in Vault ✅
 - **Secret Name**: `OPENWEATHERMAP_API_KEY`
-- **Value**: `b3251fdc5670a0b224c2c5eb410a2504`
+- **Value**: Set to your OpenWeather API key (stored securely in Supabase Vault)
 - **Location**: Supabase Vault
 - **Created**: 2025-12-28 11:19:09 UTC
 - **Status**: ✅ Verified via SQL query
@@ -41,13 +43,14 @@ This reads from **Edge Function secrets**, not Vault. You need to set it via:
 3. Click "Add new secret"
 4. Enter:
    - **Name**: `OPENWEATHERMAP_API_KEY`
-   - **Value**: `b3251fdc5670a0b224c2c5eb410a2504`
+   - **Value**: Your OpenWeather API key (get from `.env.local` or OpenWeather account)
 5. Click "Save"
 
 ### Option 2: Supabase CLI
 ```bash
 # If you have Supabase CLI installed and authenticated
-supabase secrets set OPENWEATHERMAP_API_KEY=b3251fdc5670a0b224c2c5eb410a2504 --project-ref bjlzeoojhplgjbajfihu
+# Replace 'your_api_key_here' with your actual OpenWeather API key
+supabase secrets set OPENWEATHERMAP_API_KEY=your_api_key_here --project-ref bjlzeoojhplgjbajfihu
 ```
 
 ## 🧪 Testing
@@ -84,4 +87,5 @@ Once the secret is set in Edge Function secrets, you can test it:
 - ⚠️ Edge Function secret needs to be set via Dashboard (separate system)
 
 Once you set the Edge Function secret via Dashboard, the `fetch-environment-data` function will be able to fetch UV index and weather data!
+
 

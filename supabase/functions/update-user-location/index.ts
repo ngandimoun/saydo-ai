@@ -31,12 +31,39 @@ serve(async (req) => {
   }
 
   try {
+    // Check for Authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      console.error('Missing Authorization header')
+      return new Response(
+        JSON.stringify({ 
+          error: 'Unauthorized',
+          message: 'Missing Authorization header. Please ensure you are logged in.',
+          code: 'MISSING_AUTH_HEADER'
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate Authorization header format
+    if (!authHeader.startsWith('Bearer ')) {
+      console.error('Invalid Authorization header format')
+      return new Response(
+        JSON.stringify({ 
+          error: 'Unauthorized',
+          message: 'Invalid Authorization header format. Expected "Bearer <token>".',
+          code: 'INVALID_AUTH_FORMAT'
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader },
         },
       }
     )
@@ -48,8 +75,38 @@ serve(async (req) => {
     } = await supabaseClient.auth.getUser()
 
     if (userError || !user) {
+      // Provide detailed error information
+      let errorMessage = 'Authentication failed'
+      let errorCode = 'AUTH_FAILED'
+
+      if (userError) {
+        console.error('Authentication error:', userError.message)
+        
+        // Distinguish between different error types
+        if (userError.message?.includes('JWT') || userError.message?.includes('token')) {
+          errorMessage = 'Invalid or expired authentication token. Please log in again.'
+          errorCode = 'INVALID_TOKEN'
+        } else if (userError.message?.includes('expired')) {
+          errorMessage = 'Authentication token has expired. Please refresh your session.'
+          errorCode = 'TOKEN_EXPIRED'
+        } else {
+          errorMessage = userError.message || 'Authentication failed'
+        }
+      } else if (!user) {
+        errorMessage = 'User not found. Please ensure you are logged in.'
+        errorCode = 'USER_NOT_FOUND'
+      }
+
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ 
+          error: 'Unauthorized',
+          message: errorMessage,
+          code: errorCode,
+          details: userError ? { 
+            message: userError.message,
+            status: userError.status 
+          } : undefined
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -101,7 +158,26 @@ serve(async (req) => {
       .single()
 
     if (error) {
-      throw error
+      console.error('Database error:', error)
+      
+      // Provide more specific error messages for database errors
+      let errorMessage = 'Failed to save location'
+      if (error.code === '23505') { // Unique constraint violation
+        errorMessage = 'Location already exists for this user'
+      } else if (error.code === '23503') { // Foreign key violation
+        errorMessage = 'Invalid user reference'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          error: errorMessage,
+          code: error.code || 'DATABASE_ERROR',
+          details: error.details || undefined
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     return new Response(
@@ -109,10 +185,21 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
+    console.error('Unexpected error:', error)
+    
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'An unexpected error occurred'
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: errorMessage,
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred while updating location'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
+
 

@@ -16,8 +16,15 @@ import { SummaryCard } from "@/components/ui/card"
  * Exploration categories (like Airbnb's category chips).
  */
 
+interface SummaryData {
+  text: string
+  metric: string
+}
+
 interface GreetingSectionProps {
   userProfile: UserProfile
+  proSummary?: SummaryData
+  healthSummary?: SummaryData
 }
 
 // Exploration categories - Airbnb style
@@ -28,7 +35,7 @@ const explorationCategories = [
   { id: 'morning', label: 'Morning', icon: Coffee, color: 'text-orange-500 bg-orange-500/10' },
 ]
 
-export function GreetingSection({ userProfile }: GreetingSectionProps) {
+export function GreetingSection({ userProfile, proSummary, healthSummary }: GreetingSectionProps) {
   const greeting = getTimeOfDayGreeting(userProfile.preferredName, userProfile.language)
   const hour = new Date().getHours()
   const timeOfDay = getTimeOfDay()
@@ -98,15 +105,15 @@ export function GreetingSection({ userProfile }: GreetingSectionProps) {
   const PrimaryIcon = timeIcons.primary
   const SecondaryIcon = timeIcons.secondary
 
-  // Mock data - TODO: Fetch from backend
-  const proSummary = {
-    text: "Organized 3 meetings and drafted 2 follow-up emails from your voice notes.",
-    metric: "7 tasks completed today"
+  // Use real data with fallback to empty state
+  const displayProSummary = proSummary || {
+    text: "Record a voice note to get AI-powered insights about your work.",
+    metric: "No activity yet"
   }
 
-  const healthSummary = {
-    text: "Your iron levels suggest adding more leafy greens. I've updated your meal plan.",
-    metric: "3 insights generated"
+  const displayHealthSummary = healthSummary || {
+    text: "Share your health goals and I'll help track your progress.",
+    metric: "No insights yet"
   }
 
   return (
@@ -285,8 +292,8 @@ export function GreetingSection({ userProfile }: GreetingSectionProps) {
           iconColor="teal"
           label="Pro Life"
           title="Work Summary"
-          description={proSummary.text}
-          metric={proSummary.metric}
+          description={displayProSummary.text}
+          metric={displayProSummary.metric}
         />
 
         {/* Health Summary */}
@@ -295,8 +302,8 @@ export function GreetingSection({ userProfile }: GreetingSectionProps) {
           iconColor="rose"
           label="Health"
           title="Health Summary"
-          description={healthSummary.text}
-          metric={healthSummary.metric}
+          description={displayHealthSummary.text}
+          metric={displayHealthSummary.metric}
         />
       </motion.div>
 

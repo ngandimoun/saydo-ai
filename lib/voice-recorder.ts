@@ -12,7 +12,7 @@ import { createClient } from './supabase'
 import { logger } from './logger'
 
 export interface RecordingOptions {
-  maxDuration?: number // in seconds, default 360 (6 minutes)
+  maxDuration?: number // in seconds, default 1800 (30 minutes)
   mimeType?: string // default 'audio/webm'
   onProgress?: (duration: number) => void
   onChunkUploaded?: (chunkNumber: number) => void
@@ -31,20 +31,24 @@ export class VoiceRecorder {
   private stream: MediaStream | null = null
   private startTime: number = 0
   private duration: number = 0
-  private maxDuration: number = 360 // 6 minutes
+  private maxDuration: number = 1800 // 30 minutes
   private options: RecordingOptions = {}
   private supabase = createClient()
   private recordingId: string | null = null
   private intervalId: NodeJS.Timeout | null = null
+  private stopResolve: ((result: RecordingResult | null) => void) | null = null
+  private lastResult: RecordingResult | null = null
 
   /**
    * Start recording
    */
   async startRecording(options: RecordingOptions = {}): Promise<void> {
     this.options = options
-    this.maxDuration = options.maxDuration || 360
+    this.maxDuration = options.maxDuration || 1800 // 30 minutes default
     this.audioChunks = []
     this.duration = 0
+    this.stopResolve = null
+    this.lastResult = null
 
     try {
       // Request microphone access
@@ -128,20 +132,18 @@ export class VoiceRecorder {
 
   /**
    * Stop recording
+   * Waits for the upload to complete before resolving
    */
   async stopRecording(): Promise<RecordingResult | null> {
     if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
       return null
     }
 
-    this.mediaRecorder.stop()
-    this.cleanup()
-
-    // Wait for onstop handler to complete
+    // Create promise that will be resolved when handleRecordingStop completes
     return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(this.getResult())
-      }, 500)
+      this.stopResolve = resolve
+      this.mediaRecorder!.stop()
+      this.cleanup()
     })
   }
 
@@ -167,11 +169,15 @@ export class VoiceRecorder {
   }
 
   private async handleRecordingStop() {
-    if (!this.recordingId) return
+    if (!this.recordingId) {
+      this.stopResolve?.(null)
+      return
+    }
 
     try {
       // Combine all audio chunks
-      const audioBlob = new Blob(this.audioChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' })
+      const mimeType = this.mediaRecorder?.mimeType || 'audio/webm'
+      const audioBlob = new Blob(this.audioChunks, { type: mimeType })
       const fileSize = audioBlob.size
 
       // Update duration
@@ -193,13 +199,27 @@ export class VoiceRecorder {
         })
 
       if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`)
+        logger.error('Supabase storage upload error', { 
+          error: uploadError,
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          errorCode: uploadError.error,
+        })
+        throw new Error(`Upload failed: ${uploadError.message || 'Unknown error'}`)
       }
 
       // Get public URL (signed URL for private bucket)
-      const { data: urlData } = this.supabase.storage
+      const { data: urlData, error: urlError } = await this.supabase.storage
         .from('voice-recordings')
         .createSignedUrl(fileName, 3600)
+
+      if (urlError) {
+        logger.error('Failed to create signed URL', { 
+          error: urlError,
+          fileName,
+        })
+        // Continue anyway - we can use the path directly if needed
+      }
 
       const audioUrl = urlData?.signedUrl || ''
 
@@ -224,6 +244,15 @@ export class VoiceRecorder {
       })
 
       this.options.onChunkUploaded?.(1)
+
+      // Store result and resolve the stop promise
+      this.lastResult = {
+        recordingId: this.recordingId,
+        audioUrl,
+        duration: this.duration,
+        fileSize,
+      }
+      this.stopResolve?.(this.lastResult)
     } catch (error) {
       logger.error('Error handling recording stop', { error })
       
@@ -234,6 +263,9 @@ export class VoiceRecorder {
           .update({ status: 'failed' })
           .eq('id', this.recordingId)
       }
+      
+      // Resolve with null on error
+      this.stopResolve?.(null)
     }
   }
 
@@ -297,4 +329,5 @@ export function getVoiceRecorder(): VoiceRecorder {
   }
   return recorderInstance
 }
+
 

@@ -13,7 +13,8 @@ import {
   Volume2,
   VolumeX,
   Repeat,
-  Shuffle
+  Shuffle,
+  AlertCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
@@ -47,6 +48,7 @@ interface FullPlayerProps {
   playlist?: FullPlayerTrack[]
   isPlaying: boolean
   currentTime: number
+  error?: string | null
   onPlay: () => void
   onPause: () => void
   onSeek: (time: number) => void
@@ -81,6 +83,7 @@ export function FullPlayer({
   playlist = [],
   isPlaying,
   currentTime,
+  error,
   onPlay,
   onPause,
   onSeek,
@@ -96,9 +99,10 @@ export function FullPlayer({
   const [isShuffled, setIsShuffled] = useState(false)
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off')
 
+  const hasError = !!error
   const category = track?.category || 'default'
-  const gradient = categoryGradients[category] || categoryGradients.default
-  const accent = categoryAccents[category] || categoryAccents.default
+  const gradient = hasError ? 'from-slate-700 via-slate-800 to-slate-900' : (categoryGradients[category] || categoryGradients.default)
+  const accent = hasError ? 'bg-slate-500' : (categoryAccents[category] || categoryAccents.default)
 
   // Get current track index in playlist
   const currentIndex = playlist.findIndex(t => t.id === track?.id)
@@ -274,20 +278,28 @@ export function FullPlayer({
               {/* Placeholder artwork if no image */}
               {!track.thumbnailUrl && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  {/* Animated rings */}
-                  <motion.div
-                    className="absolute inset-8 rounded-full border-2 border-white/10"
-                    animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.1, 0.3] }}
-                    transition={{ duration: 3, repeat: Infinity }}
-                  />
-                  <motion.div
-                    className="absolute inset-16 rounded-full border-2 border-white/10"
-                    animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.1, 0.2] }}
-                    transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-                  />
+                  {/* Animated rings - hide when error */}
+                  {!hasError && (
+                    <>
+                      <motion.div
+                        className="absolute inset-8 rounded-full border-2 border-white/10"
+                        animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.1, 0.3] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                      />
+                      <motion.div
+                        className="absolute inset-16 rounded-full border-2 border-white/10"
+                        animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.1, 0.2] }}
+                        transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
+                      />
+                    </>
+                  )}
                   
-                  {/* Waveform animation when playing */}
-                  {isPlaying ? (
+                  {/* Error icon or waveform animation when playing */}
+                  {hasError ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <AlertCircle size={64} className="text-white/40" />
+                    </div>
+                  ) : isPlaying ? (
                     <div className="flex items-end gap-1.5 h-16">
                       {[...Array(7)].map((_, i) => (
                         <motion.div
@@ -334,9 +346,14 @@ export function FullPlayer({
           className="px-8 mb-4"
         >
           <h1 className="text-2xl font-bold text-white truncate">{track.title}</h1>
-          {track.narrator && (
+          {hasError ? (
+            <div className="flex items-center gap-2 mt-2">
+              <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+              <p className="text-red-300 text-sm">{error}</p>
+            </div>
+          ) : track.narrator ? (
             <p className="text-white/60 text-lg truncate mt-1">{track.narrator}</p>
-          )}
+          ) : null}
         </motion.div>
 
         {/* Progress Bar */}
@@ -421,17 +438,22 @@ export function FullPlayer({
 
             {/* Play/Pause */}
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={isPlaying ? onPause : onPlay}
+              whileHover={hasError ? {} : { scale: 1.05 }}
+              whileTap={hasError ? {} : { scale: 0.95 }}
+              onClick={hasError ? undefined : (isPlaying ? onPause : onPlay)}
+              disabled={hasError}
               className={cn(
                 "w-16 h-16 rounded-full flex items-center justify-center",
-                "bg-white text-slate-900",
+                hasError 
+                  ? "bg-white/50 text-slate-500 cursor-not-allowed"
+                  : "bg-white text-slate-900",
                 "shadow-lg shadow-white/20"
               )}
-              aria-label={isPlaying ? "Pause" : "Play"}
+              aria-label={hasError ? "Audio unavailable" : (isPlaying ? "Pause" : "Play")}
             >
-              {isPlaying ? (
+              {hasError ? (
+                <AlertCircle size={28} className="text-slate-500" />
+              ) : isPlaying ? (
                 <Pause size={28} fill="currentColor" />
               ) : (
                 <Play size={28} fill="currentColor" className="ml-1" />

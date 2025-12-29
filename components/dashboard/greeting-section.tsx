@@ -4,9 +4,10 @@ import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Sparkles, TrendingUp, Heart } from "lucide-react"
 import { getTimeOfDay, getGreeting } from "@/lib/dashboard/time-utils"
-import { getMockDailySummary } from "@/lib/dashboard/mock-data"
 import type { UserProfile, DailySummary } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase"
+import { logger } from "@/lib/logger"
 
 /**
  * Greeting Section
@@ -17,11 +18,6 @@ import { cn } from "@/lib/utils"
  * - User's language preference
  * 
  * Also shows AI-generated daily summary of what Saydo did.
- * 
- * TODO (AI Integration):
- * - Fetch daily summary from backend
- * - Generate summary at midnight or first open
- * - Include mood-aware greetings
  */
 
 interface GreetingSectionProps {
@@ -37,18 +33,53 @@ export function GreetingSection({ userProfile, className }: GreetingSectionProps
   const greeting = getGreeting(timeOfDay, language)
   const name = userProfile?.preferredName || 'there'
 
-  // Load daily summary
+  // Load daily summary from Supabase
   useEffect(() => {
-    /**
-     * TODO (Backend):
-     * const { data } = await supabase
-     *   .from('daily_summaries')
-     *   .select('*')
-     *   .eq('user_id', user.id)
-     *   .eq('date', today)
-     *   .single()
-     */
-    setDailySummary(getMockDailySummary())
+    const loadSummary = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user) return
+
+        // Get today's date range
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+
+        const { data, error } = await supabase
+          .from('daily_summaries')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('date', today.toISOString())
+          .lt('date', tomorrow.toISOString())
+          .single()
+
+        if (error) {
+          // No summary for today - that's fine, will show fallback
+          logger.debug('No daily summary found for today')
+          return
+        }
+
+        if (data) {
+          setDailySummary({
+            id: data.id,
+            userId: data.user_id,
+            date: new Date(data.date),
+            proSummary: data.pro_summary,
+            healthSummary: data.health_summary,
+            tasksCompleted: data.tasks_completed,
+            insightsGenerated: data.insights_generated,
+            moodTrend: data.mood_trend,
+            createdAt: new Date(data.created_at),
+          })
+        }
+      } catch (error) {
+        logger.error('Failed to load daily summary', { error })
+      }
+    }
+    loadSummary()
   }, [])
 
   return (
@@ -154,6 +185,7 @@ export function GreetingSection({ userProfile, className }: GreetingSectionProps
     </section>
   )
 }
+
 
 
 

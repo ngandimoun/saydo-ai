@@ -6,7 +6,9 @@ import type { VoiceNote } from "@/lib/dashboard/types"
 import { formatDuration } from "@/lib/dashboard/time-utils"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { springs, staggerContainer, staggerItem, fadeInUp } from "@/lib/motion-system"
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 
 /**
  * Voice Feed - Airbnb-Inspired
@@ -91,8 +93,14 @@ interface VoiceNoteCardProps {
 }
 
 function VoiceNoteCard({ note, index }: VoiceNoteCardProps) {
+  const router = useRouter()
   const isProcessing = note.status === 'processing' || note.status === 'uploading'
   const isCompleted = note.status === 'completed'
+
+  const handleClick = () => {
+    // Navigate to voice timeline with this note highlighted
+    router.push(`/dashboard/voice?id=${note.id}`)
+  }
 
   const formatRelativeTime = (date: Date) => {
     const now = new Date()
@@ -116,12 +124,23 @@ function VoiceNoteCard({ note, index }: VoiceNoteCardProps) {
     <motion.div
       variants={staggerItem}
       whileHover={{ x: 4 }}
+      whileTap={{ scale: 0.98 }}
       transition={springs.snappy}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleClick()
+        }
+      }}
       className={cn(
         "p-4 rounded-2xl cursor-pointer",
         "bg-card border border-border/50",
         "hover:border-border hover:shadow-sm",
-        "transition-all duration-200"
+        "transition-all duration-200",
+        "focus:outline-none focus:ring-2 focus:ring-primary/50"
       )}
     >
       <div className="flex items-start gap-3">
@@ -164,9 +183,12 @@ function VoiceNoteCard({ note, index }: VoiceNoteCardProps) {
 
           {/* AI Summary */}
           {note.aiSummary && (
-            <p className="text-sm text-foreground leading-relaxed mb-2">
-              {note.aiSummary}
-            </p>
+            <div className="mb-2">
+              <MarkdownRenderer 
+                content={note.aiSummary}
+                className="text-foreground text-sm"
+              />
+            </div>
           )}
 
           {/* Processing state */}

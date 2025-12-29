@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Home } from "lucide-react"
 import { Header } from "@/components/dashboard/home/header"
@@ -9,19 +10,27 @@ import { UrgentAlerts } from "@/components/dashboard/home/urgent-alerts"
 import { QuickActions } from "@/components/dashboard/home/quick-actions"
 import { VoiceFeed } from "@/components/dashboard/home/voice-feed"
 import { TasksPreview } from "@/components/dashboard/home/tasks-preview"
-import { ChatWidget } from "@/components/dashboard/chat"
-import { 
-  getMockUserProfile, 
-  getMockUrgentAlerts,
-  getMockVoiceNotes,
-  getMockTasks
-} from "@/lib/dashboard/mock-data"
+
+// Dynamically import ChatWidget to reduce initial bundle size
+const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
+  ssr: false,
+  loading: () => null
+})
 import type { UserProfile, UrgentAlert, VoiceNote, Task } from "@/lib/dashboard/types"
 import { springs } from "@/lib/motion-system"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 import { useUrgentAlertsRealtime, useTasksRealtime, useVoiceRecordingsRealtime } from "@/hooks/use-realtime"
 import { logger } from "@/lib/logger"
+import { 
+  useProfile, 
+  useUrgentAlerts, 
+  useTasks, 
+  useVoiceRecordings,
+  useInvalidateUrgentAlerts,
+  useInvalidateTasks,
+  useInvalidateVoiceRecordings
+} from "@/hooks/queries"
 
 /**
  * Home Tab Page - Airbnb-Inspired
@@ -57,12 +66,20 @@ const itemVariants = {
 }
 
 export default function HomePage() {
-  const [isLoading, setIsLoading] = useState(true)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [urgentAlerts, setUrgentAlerts] = useState<UrgentAlert[]>([])
-  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [todayStats, setTodayStats] = useState<{
+    tasksCompletedToday: number
+    voiceNotesToday: number
+    insightsGenerated: number
+  }>({ tasksCompletedToday: 0, voiceNotesToday: 0, insightsGenerated: 0 })
+
+  // Use query hooks for cached data
+  const { data: userProfile, isLoading: profileLoading } = useProfile()
+  const { data: urgentAlerts = [], isLoading: alertsLoading } = useUrgentAlerts()
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks({ includeCompleted: false, limit: 10 })
+  const { data: voiceNotes = [], isLoading: voiceNotesLoading } = useVoiceRecordings({ limit: 5 })
+
+  const isLoading = profileLoading || alertsLoading || tasksLoading || voiceNotesLoading
 
   // Get user ID for realtime subscriptions
   useEffect(() => {
@@ -76,143 +93,56 @@ export default function HomePage() {
     getUserId()
   }, [])
 
-  // Load initial data
+  // Fetch today's stats (not cached, calculated fresh)
   useEffect(() => {
-    const loadData = async () => {
+    const loadStats = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
-      if (!user) {
-        setIsLoading(false)
-        return
-      }
+      if (!user) return
 
-      try {
-        // Load user profile from database
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-
-        if (profile) {
-          setUserProfile({
-            id: profile.id,
-            preferredName: profile.preferred_name || 'there',
-            language: profile.language || 'en',
-            profession: profile.profession || 'Professional',
-            avatarUrl: profile.avatar_url,
-            createdAt: new Date(profile.created_at),
-            updatedAt: new Date(profile.updated_at),
-          })
-        } else {
-          setUserProfile(getMockUserProfile())
-        }
-
-        // Load urgent alerts
-        const { data: alerts } = await supabase
-          .from('urgent_alerts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('is_dismissed', false)
-          .order('created_at', { ascending: false })
-          .limit(5)
-
-        if (alerts) {
-          setUrgentAlerts(alerts.map(a => ({
-            id: a.id,
-            userId: a.user_id,
-            title: a.title,
-            description: a.description,
-            urgencyLevel: a.urgency_level as UrgentAlert['urgencyLevel'],
-            category: a.category as UrgentAlert['category'],
-            audioSummaryUrl: a.audio_summary_url,
-            sourceType: a.source_type as UrgentAlert['sourceType'],
-            sourceId: a.source_id,
-            isRead: a.is_read,
-            isDismissed: a.is_dismissed,
-            createdAt: new Date(a.created_at),
-            expiresAt: a.expires_at ? new Date(a.expires_at) : undefined,
-          })))
-        } else {
-          setUrgentAlerts(getMockUrgentAlerts())
-        }
-
-        // Load tasks
-        const { data: tasksData } = await supabase
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      
+      const [tasksResult, voiceNotesResult, insightsResult] = await Promise.all([
+        supabase
           .from('tasks')
-          .select('*')
+          .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .neq('status', 'completed')
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        if (tasksData) {
-          setTasks(tasksData.map(t => ({
-            id: t.id,
-            userId: t.user_id,
-            title: t.title,
-            description: t.description,
-            priority: t.priority as Task['priority'],
-            status: t.status as Task['status'],
-            dueDate: t.due_date ? new Date(t.due_date) : undefined,
-            dueTime: t.due_time,
-            category: t.category,
-            tags: t.tags || [],
-            sourceRecordingId: t.source_recording_id,
-            createdAt: new Date(t.created_at),
-            completedAt: t.completed_at ? new Date(t.completed_at) : undefined,
-          })))
-        } else {
-          setTasks(getMockTasks())
-        }
-
-        // Load voice notes
-        const { data: recordings } = await supabase
+          .eq('status', 'completed')
+          .gte('completed_at', todayStart.toISOString()),
+        supabase
           .from('voice_recordings')
-          .select('*')
+          .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5)
+          .gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('health_insights')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('generated_at', todayStart.toISOString()),
+      ])
 
-        if (recordings) {
-          setVoiceNotes(recordings.map(r => ({
-            id: r.id,
-            userId: r.user_id,
-            durationSeconds: r.duration_seconds,
-            audioUrl: r.audio_url,
-            transcription: r.transcription,
-            status: r.status as VoiceNote['status'],
-            contextChainId: r.context_chain_id,
-            createdAt: new Date(r.created_at),
-            extractedTasks: [],
-            extractedReminders: [],
-            extractedHealthNotes: [],
-          })))
-        } else {
-          setVoiceNotes(getMockVoiceNotes())
-        }
-      } catch (error) {
-        logger.error('Failed to load dashboard data', { error })
-        // Fallback to mock data
-        setUserProfile(getMockUserProfile())
-        setUrgentAlerts(getMockUrgentAlerts())
-        setTasks(getMockTasks())
-        setVoiceNotes(getMockVoiceNotes())
-      }
-
-      setIsLoading(false)
+      setTodayStats({
+        tasksCompletedToday: tasksResult.count || 0,
+        voiceNotesToday: voiceNotesResult.count || 0,
+        insightsGenerated: insightsResult.count || 0,
+      })
     }
 
-    loadData()
+    loadStats()
   }, [])
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates and invalidate queries
+  const invalidateUrgentAlerts = useInvalidateUrgentAlerts()
+  const invalidateTasks = useInvalidateTasks()
+  const invalidateVoiceRecordings = useInvalidateVoiceRecordings()
+
   useUrgentAlertsRealtime(
     userId || '',
     (alert) => {
       logger.info('New urgent alert received', { alert })
-      setUrgentAlerts(prev => [alert as UrgentAlert, ...prev])
+      invalidateUrgentAlerts()
     },
     !!userId
   )
@@ -221,13 +151,7 @@ export default function HomePage() {
     userId || '',
     (task) => {
       logger.info('Task updated', { task })
-      setTasks(prev => {
-        const existing = prev.findIndex(t => t.id === (task as Task).id)
-        if (existing >= 0) {
-          return prev.map((t, i) => i === existing ? task as Task : t)
-        }
-        return [task as Task, ...prev]
-      })
+      invalidateTasks()
     },
     !!userId
   )
@@ -236,28 +160,7 @@ export default function HomePage() {
     userId || '',
     (recording) => {
       logger.info('Voice recording updated', { recording })
-      // Transform recording to VoiceNote format with required fields
-      const voiceNote: VoiceNote = {
-        id: (recording as any).id,
-        userId: (recording as any).user_id,
-        durationSeconds: (recording as any).duration_seconds,
-        audioUrl: (recording as any).audio_url,
-        transcription: (recording as any).transcription,
-        status: (recording as any).status as VoiceNote['status'],
-        contextChainId: (recording as any).context_chain_id,
-        createdAt: new Date((recording as any).created_at),
-        extractedTasks: [],
-        extractedReminders: [],
-        extractedHealthNotes: [],
-        aiSummary: (recording as any).ai_summary,
-      }
-      setVoiceNotes(prev => {
-        const existing = prev.findIndex(v => v.id === voiceNote.id)
-        if (existing >= 0) {
-          return prev.map((v, i) => i === existing ? voiceNote : v)
-        }
-        return [voiceNote, ...prev]
-      })
+      invalidateVoiceRecordings()
     },
     !!userId
   )
@@ -352,7 +255,19 @@ export default function HomePage() {
 
         {/* Hero Greeting with achievements */}
         <motion.div variants={itemVariants}>
-          <GreetingSection userProfile={userProfile} />
+          <GreetingSection 
+            userProfile={userProfile} 
+            proSummary={todayStats.tasksCompletedToday > 0 || todayStats.voiceNotesToday > 0 ? {
+              text: todayStats.voiceNotesToday > 0 
+                ? `Processed ${todayStats.voiceNotesToday} voice note${todayStats.voiceNotesToday > 1 ? 's' : ''} and extracted actionable items.`
+                : "Your tasks are organized and ready.",
+              metric: `${todayStats.tasksCompletedToday} task${todayStats.tasksCompletedToday !== 1 ? 's' : ''} completed today`
+            } : undefined}
+            healthSummary={todayStats.insightsGenerated > 0 ? {
+              text: "I've analyzed your health data and generated personalized insights.",
+              metric: `${todayStats.insightsGenerated} insight${todayStats.insightsGenerated !== 1 ? 's' : ''} generated`
+            } : undefined}
+          />
         </motion.div>
 
         {/* Urgent alerts - shown prominently if any */}
