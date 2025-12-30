@@ -89,7 +89,36 @@ export const ExtractedItemsSchema = z.object({
       tags: z.array(z.string()).default([]),
     })
   ),
-  summary: z.string().describe("Brief summary of what was said"),
+  summary: z.string().describe(
+    "Comprehensive summary capturing ALL user intents and mentions: " +
+    "tasks, reminders, content requests, questions, concerns, updates about their day/work, " +
+    "professional activities, important details for future correlation. " +
+    "Must be in user's language and include context for understanding the full picture. " +
+    "This summary will be used to correlate with other voices throughout the day."
+  ),
+  // Content generation predictions
+  contentPredictions: z.array(
+    z.object({
+      contentType: z.string().describe("Type of content: post, tweet, email, report, sermon, shift_log, summary, memo, etc."),
+      description: z.string().describe("What content to generate based on the transcription"),
+      confidence: z.number().min(0).max(1).describe("Confidence score 0-1. Use 0.8-1.0 for explicit requests, 0.5-0.7 for implicit opportunities"),
+      targetPlatform: z.string().optional().describe("Target platform if social post (e.g., 'x', 'linkedin', 'twitter')"),
+      suggestedTitle: z.string().optional().describe("Suggested title for the content"),
+      // Profession context (from Mastra memory)
+      professionContext: z.string().optional()
+        .describe("User's profession from onboarding (nurse, founder, pastor, pharmacist, doctor, football_manager, etc.)"),
+      vocabularyLevel: z.enum(["technical", "professional", "casual", "academic"]).optional()
+        .describe("Vocabulary level: technical (nurse/pharmacist/doctor), professional (founder/manager), casual (social posts), academic"),
+      formalityLevel: z.enum(["formal", "professional", "casual"]).optional()
+        .describe("Formality level: formal (reports), professional (emails), casual (social posts)"),
+      terminology: z.array(z.string()).optional()
+        .describe("Profession-specific terms to use (e.g., ['patient', 'medication'] for nurse, ['sermon', 'congregation'] for pastor)"),
+      tone: z.enum(["professional", "friendly", "authoritative", "inspiring", "clinical", "pastoral"]).optional()
+        .describe("Tone: clinical (nurse/doctor/pharmacist), inspiring (pastor), professional (founder), friendly (social posts)"),
+      audience: z.string().optional()
+        .describe("Target audience: healthcare team, congregation, tech community, investors, team management, etc."),
+    })
+  ).default([]).describe("Content generation opportunities detected in the transcription with profession-specific context"),
 });
 
 export type ExtractedItems = z.infer<typeof ExtractedItemsSchema>;
@@ -111,7 +140,8 @@ export const outputExtractedItemsTool = createTool({
       items.tasks.length +
       items.reminders.length +
       items.healthNotes.length +
-      items.generalNotes.length;
+      items.generalNotes.length +
+      (items.contentPredictions?.length || 0);
     return { success: true, itemCount: totalItems };
   },
 });
@@ -366,6 +396,136 @@ Extract any health-related observations:
 Anything that's not a task, reminder, or health note but worth recording.
 - **General note content must be in ${languageName}**
 
+### Content Generation Detection
+
+**CRITICAL: Use profession context from user onboarding and Mastra memory**
+
+User's Profession: ${context.profession?.name || "professional"}
+Critical Artifacts: ${context.criticalArtifacts.join(", ") || "general documents"}
+Social Platforms: ${context.socialIntelligence.join(", ") || "social media"}
+
+**Profession-Specific Content Understanding:**
+
+The SAME content type means DIFFERENT things based on profession. You MUST use profession context to determine vocabulary, tone, terminology, and audience.
+
+**Profession Examples:**
+
+- **"report" for Nurse/Doctor**: Shift report, patient report
+  → professionContext: "${context.profession?.name || "nurse"}"
+  → vocabularyLevel: "technical"
+  → formalityLevel: "formal"
+  → tone: "clinical"
+  → terminology: ["patient", "medication", "vital signs", "shift", "diagnosis", "treatment"]
+  → audience: "healthcare team"
+
+- **"report" for Pastor**: Ministry report, sermon notes
+  → professionContext: "${context.profession?.name || "pastor"}"
+  → vocabularyLevel: "professional"
+  → formalityLevel: "professional"
+  → tone: "inspiring"
+  → terminology: ["sermon", "congregation", "ministry", "scripture", "worship", "prayer"]
+  → audience: "congregation" or "church leadership"
+
+- **"report" for Founder**: Business report, investor update
+  → professionContext: "${context.profession?.name || "founder"}"
+  → vocabularyLevel: "professional"
+  → formalityLevel: "professional"
+  → tone: "professional"
+  → terminology: ["revenue", "metrics", "growth", "strategy", "team", "product"]
+  → audience: "investors" or "stakeholders"
+
+- **"report" for Pharmacist**: Medication report, inventory report
+  → professionContext: "${context.profession?.name || "pharmacist"}"
+  → vocabularyLevel: "technical"
+  → formalityLevel: "formal"
+  → tone: "clinical"
+  → terminology: ["medication", "dosage", "interaction", "prescription", "inventory", "drug"]
+  → audience: "healthcare providers" or "pharmacy team"
+
+- **"report" for Football Manager**: Match report, player analysis
+  → professionContext: "${context.profession?.name || "football_manager"}"
+  → vocabularyLevel: "professional"
+  → formalityLevel: "professional"
+  → tone: "authoritative"
+  → terminology: ["tactics", "formation", "player", "match", "performance", "strategy"]
+  → audience: "team management" or "fans"
+
+**Detection Rules:**
+1. Detect explicit requests in ANY language:
+   - French: "génère-moi", "générer", "crée-moi", "créer", "écris-moi", "écrire", "fais-moi", "rédige-moi", "rédiger"
+   - English: "generate", "create", "write", "draft", "make me", "compose"
+   - Spanish: "genera", "crea", "escribe", "redacta", "hazme"
+   - Any similar verb pattern followed by a content type
+
+2. Use profession from context to determine:
+   - Content style (vocabulary, formality, tone)
+   - Appropriate terminology (profession-specific terms)
+   - Target audience
+   - Format requirements
+
+3. For ambiguous requests like "report", profession determines the type:
+   - Nurse: "nursing report" → shift_report with clinical terminology
+   - Pastor: "report" → ministry_report with pastoral language
+   - Founder: "report" → business_report with business terminology
+
+4. Always include ALL profession context fields:
+   - professionContext: User's profession name
+   - vocabularyLevel: Based on profession and content type
+   - formalityLevel: Based on content type (formal for reports, casual for social)
+   - terminology: Array of profession-specific terms
+   - tone: Appropriate for profession (clinical, inspiring, professional, etc.)
+   - audience: Who will read this content
+
+**Examples with Full Context:**
+
+- Nurse: "do me nursing report of my day" →
+  contentType: "shift_report",
+  description: "nursing report of my day",
+  confidence: 0.9,
+  professionContext: "nurse",
+  vocabularyLevel: "technical",
+  formalityLevel: "formal",
+  terminology: ["patient", "medication", "vital signs", "shift", "nursing"],
+  tone: "clinical",
+  audience: "healthcare team"
+
+- Founder: "draft me a X post about coding" →
+  contentType: "tweet",
+  description: "X post about coding",
+  confidence: 0.9,
+  targetPlatform: "x",
+  professionContext: "founder",
+  vocabularyLevel: "professional",
+  formalityLevel: "casual",
+  terminology: ["codebase", "feature", "deployment", "coding", "development"],
+  tone: "friendly",
+  audience: "tech community"
+
+- Pastor: "I need a report for Sunday service" →
+  contentType: "sermon_notes" or "ministry_report",
+  description: "report for Sunday service",
+  confidence: 0.85,
+  professionContext: "pastor",
+  vocabularyLevel: "professional",
+  formalityLevel: "professional",
+  terminology: ["sermon", "congregation", "ministry", "scripture", "worship"],
+  tone: "inspiring",
+  audience: "congregation"
+
+**Implicit Opportunities (Medium Confidence 0.5-0.7):**
+- User mentions something interesting without explicitly asking
+- User describes their day/work in detail → might want summary/report
+- User talks about discovery/insight → might want post/memo
+- Still include profession context even for implicit predictions
+
+**Rules:**
+- For explicit requests (user directly asks), set confidence: 0.8-1.0
+- For implicit opportunities, set confidence: 0.5-0.7
+- Extract topic/description from transcription context
+- If platform mentioned (X, Twitter, LinkedIn), include in targetPlatform
+- ALL contentPredictions fields must be in ${languageName}
+- ALWAYS include profession context fields for accurate generation
+
 ## OUTPUT FORMAT
 Use the output-extracted-items tool to return structured data.
 Always include a brief summary of the transcription.
@@ -402,13 +562,36 @@ The summary field should be clean and well-structured using markdown formatting:
 /**
  * Creates a voice processing agent with user context
  */
-export async function createVoiceAgent(userContext: UserContext, userTimezone?: string): Promise<Agent> {
+export async function createVoiceAgent(
+  userContext: UserContext,
+  userTimezone?: string,
+  memoryThreadId?: string
+): Promise<Agent> {
   const instructions = await generateVoiceAgentPrompt(userContext, userTimezone);
+
+  // Import memory helpers
+  const { saydoMemory } = await import("../memory/config");
+  const { getUserMemoryThreadId, initializeOrUpdateUserMemory } = await import("../memory/onboarding-memory");
+
+  // Get or create memory thread for user
+  let threadId = memoryThreadId;
+  if (!threadId) {
+    threadId = await getUserMemoryThreadId(userContext.userId);
+    if (!threadId) {
+      // Initialize memory if it doesn't exist
+      threadId = await initializeOrUpdateUserMemory(userContext.userId);
+    }
+  }
+
+  // Get memory instance - agent will automatically load working memory from thread
+  const memory = saydoMemory;
+
   return new Agent({
     id: "voice-agent",
     name: "Voice Processor",
     instructions,
     model: "openai/gpt-4o-mini",
+    memory: memory, // Attach memory - agent will have access to onboarding data from working memory
     tools: {
       outputExtractedItems: outputExtractedItemsTool,
     },

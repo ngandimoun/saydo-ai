@@ -8,30 +8,70 @@ function getSupabaseClient() {
   }
   return createClient(supabaseUrl, supabaseServiceKey);
 }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function isSchemaCacheError(error) {
+  return error.code === "PGRST205";
+}
 async function savePattern(userId, patternType, patternData, metadata) {
-  try {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.from("user_patterns").insert({
-      user_id: userId,
-      pattern_type: patternType,
-      pattern_data: patternData,
-      frequency: 1,
-      confidence_score: 10,
-      // Initial confidence
-      metadata: metadata || {}
-    }).select("id").single();
-    if (error) {
-      console.error("[savePattern] Insert error", error);
-      return { success: false, error: error.message };
+  const maxRetries = 3;
+  const retryDelays = [2e3, 4e3, 8e3];
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.from("user_patterns").insert({
+        user_id: userId,
+        pattern_type: patternType,
+        pattern_data: patternData,
+        frequency: 1,
+        confidence_score: 10,
+        // Initial confidence
+        metadata: metadata || {}
+      }).select("id").single();
+      if (error) {
+        if (isSchemaCacheError(error) && attempt < maxRetries) {
+          const delay = retryDelays[attempt];
+          console.warn(
+            `[savePattern] Schema cache miss (PGRST205), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`
+          );
+          await sleep(delay);
+          continue;
+        }
+        if (isSchemaCacheError(error)) {
+          console.warn(
+            "[savePattern] Schema cache still not refreshed after all retries. Pattern save skipped (non-critical)."
+          );
+        } else {
+          console.error("[savePattern] Insert error", error);
+        }
+        return { success: false, error: error.message };
+      }
+      if (attempt > 0) {
+        console.log(`[savePattern] Successfully saved pattern after ${attempt} retry(ies)`);
+      }
+      return { success: true, patternId: data.id };
+    } catch (err) {
+      const errorObj = err;
+      if (isSchemaCacheError(errorObj) && attempt < maxRetries) {
+        const delay = retryDelays[attempt];
+        console.warn(
+          `[savePattern] Schema cache exception, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await sleep(delay);
+        continue;
+      }
+      console.error("[savePattern] Exception", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to save pattern"
+      };
     }
-    return { success: true, patternId: data.id };
-  } catch (err) {
-    console.error("[savePattern] Exception", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to save pattern"
-    };
   }
+  return {
+    success: false,
+    error: "Failed to save pattern after all retries"
+  };
 }
 async function getUserPatterns(userId, patternType) {
   try {

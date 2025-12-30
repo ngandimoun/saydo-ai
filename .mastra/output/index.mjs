@@ -42,7 +42,7 @@ import { Buffer as Buffer$1 } from 'buffer';
 import { tools } from './tools.mjs';
 import 'openai';
 
-const LANGUAGE_NAMES$3 = {
+const LANGUAGE_NAMES$5 = {
   en: "English",
   es: "Spanish",
   fr: "French",
@@ -95,7 +95,7 @@ const LANGUAGE_NAMES$3 = {
   sr: "Serbian"
 };
 function generateSaydoSystemPrompt(context) {
-  const languageName = LANGUAGE_NAMES$3[context.language] || "English";
+  const languageName = LANGUAGE_NAMES$5[context.language] || "English";
   const allergyWarning = context.allergies.length > 0 ? `
 \u26A0\uFE0F CRITICAL - USER ALLERGIES: ${context.allergies.join(", ")}
        NEVER recommend or suggest anything containing these allergens!` : "";
@@ -182,7 +182,7 @@ When starting a conversation, first use the getUserProfile tool to fetch the use
   }
 });
 
-const LANGUAGE_NAMES$2 = {
+const LANGUAGE_NAMES$4 = {
   en: "English",
   es: "Spanish",
   fr: "French",
@@ -243,7 +243,17 @@ const ExtractedItemsSchema = z.object({
       tags: z.array(z.string()).default([])
     })
   ),
-  summary: z.string().describe("Brief summary of what was said")
+  summary: z.string().describe("Brief summary of what was said"),
+  // Content generation predictions
+  contentPredictions: z.array(
+    z.object({
+      contentType: z.string().describe("Type of content: post, tweet, email, report, summary, memo, etc."),
+      description: z.string().describe("What content to generate based on the transcription"),
+      confidence: z.number().min(0).max(1).describe("Confidence score 0-1. Use 0.8-1.0 for explicit requests, 0.5-0.7 for implicit opportunities"),
+      targetPlatform: z.string().optional().describe("Target platform if social post (e.g., 'x', 'linkedin', 'twitter')"),
+      suggestedTitle: z.string().optional().describe("Suggested title for the content")
+    })
+  ).default([]).describe("Content generation opportunities detected in the transcription")
 });
 const outputExtractedItemsTool = createTool({
   id: "output-extracted-items",
@@ -254,7 +264,7 @@ const outputExtractedItemsTool = createTool({
     itemCount: z.number()
   }),
   execute: async (items) => {
-    const totalItems = items.tasks.length + items.reminders.length + items.healthNotes.length + items.generalNotes.length;
+    const totalItems = items.tasks.length + items.reminders.length + items.healthNotes.length + items.generalNotes.length + (items.contentPredictions?.length || 0);
     return { success: true, itemCount: totalItems };
   }
 });
@@ -301,7 +311,7 @@ async function getPatternContext(userId) {
   }
 }
 async function generateVoiceAgentPrompt(context, userTimezone) {
-  const languageName = LANGUAGE_NAMES$2[context.language] || "English";
+  const languageName = LANGUAGE_NAMES$4[context.language] || "English";
   const timezone = userTimezone || await getUserTimezone(context.userId);
   const now = /* @__PURE__ */ new Date();
   const dateFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -477,6 +487,39 @@ Extract any health-related observations:
 ### General Notes
 Anything that's not a task, reminder, or health note but worth recording.
 - **General note content must be in ${languageName}**
+
+### Content Generation Detection
+
+Detect when the user wants content generated. Look for explicit requests in ANY language:
+
+**Explicit Request Patterns (High Confidence 0.8-1.0):**
+- **French**: "g\xE9n\xE8re-moi", "g\xE9n\xE9rer", "cr\xE9e-moi", "cr\xE9er", "\xE9cris-moi", "\xE9crire", "fais-moi", "r\xE9dige-moi", "r\xE9diger"
+- **English**: "generate", "create", "write", "draft", "make me", "compose"
+- **Spanish**: "genera", "crea", "escribe", "redacta", "hazme"
+- **Any similar verb pattern** followed by a content type
+
+**Content Types to Detect:**
+- Social posts: "tweet", "post", "publication", "publicaci\xF3n"
+- Professional: "email", "courriel", "correo", "report", "rapport", "informe", "memo", "note"
+- Other: "summary", "r\xE9sum\xE9", "resumen", "article", "article"
+
+**Examples:**
+- "Peux-tu me g\xE9n\xE9rer un tweet sur la fonction de codage ?" \u2192 contentType: "tweet", description: "tweet about coding function", confidence: 0.9, targetPlatform: "x"
+- "Can you write a post about my meeting?" \u2192 contentType: "post", description: "post about meeting", confidence: 0.9
+- "I need an email for the client" \u2192 contentType: "email", description: "email for client", confidence: 0.85
+- "G\xE9n\xE8re-moi un rapport sur ma journ\xE9e" \u2192 contentType: "report", description: "report about my day", confidence: 0.9
+
+**Implicit Opportunities (Medium Confidence 0.5-0.7):**
+- User mentions something interesting without explicitly asking for content
+- User describes their day/work in detail \u2192 might want a summary/report
+- User talks about a discovery/insight \u2192 might want a post/memo
+
+**Rules:**
+- For explicit requests (user directly asks), set confidence: 0.8-1.0
+- For implicit opportunities, set confidence: 0.5-0.7
+- Extract the topic/description from the transcription context
+- If platform is mentioned (X, Twitter, LinkedIn), include in targetPlatform
+- All contentPredictions fields must be in ${languageName}
 
 ## OUTPUT FORMAT
 Use the output-extracted-items tool to return structured data.
@@ -666,7 +709,7 @@ Use parse-date for date parsing and output-task-extraction for structured output
   }
 });
 
-const LANGUAGE_NAMES$1 = {
+const LANGUAGE_NAMES$3 = {
   en: "English",
   es: "Spanish",
   fr: "French",
@@ -816,7 +859,7 @@ const SKIN_TONE_UV_RECOMMENDATIONS = {
   veryDeep: { maxMinutes: 120, spfMinimum: 15 }
 };
 function generateHealthAgentPrompt(context) {
-  const languageName = LANGUAGE_NAMES$1[context.language] || "English";
+  const languageName = LANGUAGE_NAMES$3[context.language] || "English";
   const bloodTypeInfo = context.bloodGroup ? BLOOD_TYPE_RECOMMENDATIONS[context.bloodGroup] : null;
   const bodyTypeInfo = context.bodyType ? BODY_TYPE_RECOMMENDATIONS[context.bodyType.toLowerCase()] || BODY_TYPE_RECOMMENDATIONS.athletic : null;
   const skinToneInfo = context.skinTone ? SKIN_TONE_UV_RECOMMENDATIONS[context.skinTone] : null;
@@ -920,9 +963,562 @@ Use the available tools to fetch environment data and save health insights.`,
   }
 });
 
+const LANGUAGE_NAMES$2 = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  ar: "Arabic",
+  zh: "Chinese",
+  ja: "Japanese",
+  pt: "Portuguese",
+  it: "Italian",
+  ru: "Russian",
+  ko: "Korean",
+  hi: "Hindi",
+  tr: "Turkish",
+  nl: "Dutch",
+  pl: "Polish",
+  sv: "Swedish"
+};
+const SmartAnalysisSchema = z.object({
+  // Standard extraction items (existing behavior)
+  extractionNeeded: z.boolean().describe("Whether to extract tasks/reminders/notes"),
+  // Content generation predictions
+  contentPredictions: z.array(z.object({
+    contentType: z.string().describe("Dynamic content type: post, email, report, summary, memo, etc."),
+    description: z.string().describe("What content to generate"),
+    confidence: z.number().min(0).max(1).describe("Confidence score 0-1"),
+    reasoning: z.string().describe("Why this content was predicted"),
+    suggestedTitle: z.string().optional().describe("Suggested title for the content"),
+    targetPlatform: z.string().optional().describe("Target platform if social post"),
+    priority: z.enum(["high", "medium", "low"]).describe("Priority of this prediction")
+  })),
+  // Conversation analysis
+  conversationInsights: z.object({
+    mainTopics: z.array(z.string()).describe("Main topics discussed"),
+    entities: z.array(z.string()).describe("People, places, things mentioned"),
+    sentiment: z.enum(["positive", "neutral", "negative", "excited", "concerned"]).describe("Overall sentiment"),
+    urgency: z.enum(["immediate", "today", "soon", "no_rush"]).describe("Urgency level detected")
+  }),
+  // Language detection
+  detectedLanguage: z.string().optional().describe("Language detected in voice if different from default"),
+  explicitLanguageRequest: z.string().optional().describe("If user explicitly requested a different language"),
+  // Summary
+  analysisNotes: z.string().describe("Brief notes about the analysis")
+});
+const outputSmartAnalysisTool = createTool({
+  id: "output-smart-analysis",
+  description: "Output the smart analysis of the voice transcription with predictions and insights",
+  inputSchema: SmartAnalysisSchema,
+  outputSchema: z.object({
+    success: z.boolean(),
+    predictionsCount: z.number()
+  }),
+  execute: async (analysis) => {
+    return {
+      success: true,
+      predictionsCount: analysis.contentPredictions.length
+    };
+  }
+});
+async function generateSmartAgentPrompt(userContext, voiceContext) {
+  const languageName = LANGUAGE_NAMES$2[userContext.language] || "English";
+  const profession = userContext.profession?.name || "professional";
+  const criticalArtifacts = userContext.criticalArtifacts.join(", ") || "general documents";
+  const socialPlatforms = userContext.socialIntelligence.join(", ") || "social media";
+  return `You are an intelligent AI assistant that analyzes voice transcriptions and PREDICTS what the user might need.
+
+## YOUR MISSION
+Analyze voice transcriptions and:
+1. Detect EXPLICIT requests (user clearly asks for something)
+2. PREDICT IMPLICIT needs (user might benefit from content they didn't explicitly ask for)
+3. Extract insights from casual conversation
+4. Connect current voice to past context for deeper understanding
+
+## USER CONTEXT
+- **Name**: ${userContext.preferredName}
+- **Language**: ${languageName} (${userContext.language})
+- **Profession**: ${profession}
+- **Critical Documents**: ${criticalArtifacts}
+- **Social Platforms**: ${socialPlatforms}
+
+## VOICE HISTORY CONTEXT
+${voiceContext || "No previous voice context available."}
+
+## PREDICTION PHILOSOPHY
+
+### Explicit Detection
+User clearly asks: "Draft me a post", "Write an email", "Make a report"
+\u2192 High confidence (0.9+), generate immediately
+
+### Implicit Prediction  
+User talks about something interesting without asking for content:
+- "I just discovered something cool about our product" \u2192 Predict: post/memo
+- "Had a great meeting with the client" \u2192 Predict: follow-up email
+- "Busy day at the hospital with 5 patients" \u2192 Predict: shift report (for nurse)
+- "Found a great Bible verse for Sunday" \u2192 Predict: sermon notes (for pastor)
+
+\u2192 Medium-high confidence (0.6-0.8), generate as suggestion
+
+### Casual Conversation
+User just talks about their day without any intent:
+- Capture insights for later
+- Note topics and entities
+- Low confidence predictions for potential future use
+
+## PROFESSION-SPECIFIC PREDICTIONS
+
+Based on profession "${profession}", prioritize:
+${getProfessionSpecificGuidance(profession)}
+
+## CONTENT TYPE DETECTION
+
+DO NOT use predefined categories. Instead, dynamically determine:
+- What type of content makes sense for this context
+- What format would be most useful
+- What platform/destination is appropriate
+
+Examples of dynamic content types:
+- "social_post" \u2192 For sharing insights on social media
+- "email_draft" \u2192 For professional communication
+- "shift_report" \u2192 For healthcare workers
+- "sermon_notes" \u2192 For religious leaders
+- "repair_log" \u2192 For mechanics/technicians
+- "meeting_summary" \u2192 After discussing meetings
+- "idea_memo" \u2192 For capturing interesting thoughts
+- "client_update" \u2192 For consultants/freelancers
+- "research_notes" \u2192 For analysts/academics
+- Any other type that fits the context!
+
+## LANGUAGE HANDLING
+
+Default language: ${languageName}
+- If user speaks in ${languageName}, generate in ${languageName}
+- If user explicitly says "write in [language]", note it in explicitLanguageRequest
+- If voice is in a different language, note it in detectedLanguage
+
+## CONFIDENCE LEVELS
+
+- **High (0.8-1.0)**: User explicitly requested OR very clear implicit need
+- **Medium (0.5-0.8)**: Good prediction based on context
+- **Low (0.2-0.5)**: Possible need, offer as suggestion
+
+## OUTPUT REQUIREMENTS
+
+Use the output-smart-analysis tool to return:
+1. Whether to extract tasks/reminders (extractionNeeded)
+2. Content predictions with confidence scores
+3. Conversation insights (topics, entities, sentiment)
+4. Any language override detected
+5. Brief analysis notes
+
+## IMPORTANT RULES
+
+1. ALWAYS look for content generation opportunities, even in casual conversation
+2. Consider the profession when making predictions
+3. Use past voice context to enrich predictions
+4. Be proactive - predict what user MIGHT want, not just what they ask for
+5. Multiple predictions are OK - user can choose what to use
+6. ALL text output must be in ${languageName}`;
+}
+function getProfessionSpecificGuidance(profession) {
+  const professionLower = profession.toLowerCase();
+  const guidance = {
+    nurse: `- Shift reports and patient summaries
+- Handoff notes for next shift
+- Medication documentation
+- Patient observation notes`,
+    doctor: `- Patient consultation notes
+- Medical reports
+- Prescription documentation
+- Research observations`,
+    founder: `- Social media posts (X, LinkedIn)
+- Investor update emails
+- Team memos
+- Product insights
+- Strategic notes`,
+    entrepreneur: `- Business insights posts
+- Networking follow-up emails
+- Pitch refinements
+- Partnership notes`,
+    pastor: `- Sermon notes and outlines
+- Church announcements
+- Pastoral care notes
+- Bible study summaries`,
+    manager: `- Team update emails
+- Meeting summaries
+- Performance notes
+- Project status reports`,
+    consultant: `- Client update emails
+- Analysis summaries
+- Recommendations
+- Meeting notes`,
+    mechanic: `- Repair logs
+- Service documentation
+- Parts lists
+- Customer communication`,
+    electrician: `- Work orders
+- Safety documentation
+- Inspection notes
+- Client estimates`,
+    default: `- Professional updates
+- Email drafts
+- Meeting summaries
+- Task documentation
+- Social media posts`
+  };
+  return guidance[professionLower] || guidance.default;
+}
+async function createSmartAgent(userContext, voiceContext) {
+  const instructions = await generateSmartAgentPrompt(userContext, voiceContext);
+  return new Agent({
+    id: "smart-proactive-agent",
+    name: "Smart Proactive Agent",
+    instructions,
+    model: "openai/gpt-4o",
+    tools: {
+      outputSmartAnalysis: outputSmartAnalysisTool
+    }
+  });
+}
+async function analyzeTranscription(transcription, userContext, voiceContext) {
+  const agent = await createSmartAgent(userContext, voiceContext);
+  const languageName = LANGUAGE_NAMES$2[userContext.language] || "English";
+  const prompt = `Analyze this voice transcription and predict what content the user might need.
+
+## TRANSCRIPTION
+"${transcription}"
+
+## INSTRUCTIONS
+1. First, determine if standard extraction is needed (tasks, reminders, health notes)
+2. Then, predict what content the user might want generated:
+   - Look for explicit requests ("write me a...", "draft a...")
+   - Look for implicit opportunities (interesting topics, updates, insights)
+   - Consider the profession (${userContext.profession?.name || "professional"})
+3. Extract conversation insights (topics, entities, sentiment)
+4. Note any language override requests
+
+Use the output-smart-analysis tool to return your analysis.
+All text must be in ${languageName}.`;
+  const response = await agent.generate(prompt);
+  const toolCalls = response.toolCalls || [];
+  const analysisCall = toolCalls.find(
+    (call) => call.toolName === "output-smart-analysis" || call.toolName === "outputSmartAnalysis"
+  );
+  if (analysisCall?.args) {
+    try {
+      const args = typeof analysisCall.args === "string" ? JSON.parse(analysisCall.args) : analysisCall.args;
+      return args;
+    } catch {
+      console.error("[analyzeTranscription] Failed to parse tool call args");
+    }
+  }
+  return {
+    extractionNeeded: true,
+    contentPredictions: [],
+    conversationInsights: {
+      mainTopics: [],
+      entities: [],
+      sentiment: "neutral",
+      urgency: "no_rush"
+    },
+    analysisNotes: "Unable to analyze transcription"
+  };
+}
+const smartAgent = new Agent({
+  id: "smart-proactive-agent",
+  name: "Smart Proactive Agent",
+  instructions: `You are an intelligent AI assistant that analyzes voice transcriptions and predicts user needs.
+Analyze conversations for both explicit requests and implicit opportunities.
+Use the output-smart-analysis tool to return structured analysis.`,
+  model: "openai/gpt-4o",
+  tools: {
+    outputSmartAnalysis: outputSmartAnalysisTool
+  }
+});
+
+var smartAgent$1 = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  SmartAnalysisSchema: SmartAnalysisSchema,
+  analyzeTranscription: analyzeTranscription,
+  createSmartAgent: createSmartAgent,
+  generateSmartAgentPrompt: generateSmartAgentPrompt,
+  outputSmartAnalysisTool: outputSmartAnalysisTool,
+  smartAgent: smartAgent
+});
+
+const LANGUAGE_NAMES$1 = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  ar: "Arabic",
+  zh: "Chinese",
+  ja: "Japanese",
+  pt: "Portuguese",
+  it: "Italian",
+  ru: "Russian",
+  ko: "Korean",
+  hi: "Hindi",
+  tr: "Turkish",
+  nl: "Dutch",
+  pl: "Polish",
+  sv: "Swedish"
+};
+const GeneratedContentSchema = z.object({
+  title: z.string().describe("Title of the generated content"),
+  contentType: z.string().describe("Type of content: post, email, report, summary, memo, etc."),
+  content: z.string().describe("The full generated content"),
+  previewText: z.string().describe("First 200 chars for preview"),
+  // Multiple versions (for posts, etc.)
+  alternativeVersions: z.array(z.object({
+    content: z.string(),
+    style: z.string().describe("Style of this version: formal, casual, creative, etc.")
+  })).optional().describe("Alternative versions of the content"),
+  // Metadata
+  tags: z.array(z.string()).describe("Auto-extracted tags"),
+  targetPlatform: z.string().optional().describe("Target platform if applicable"),
+  tone: z.enum(["formal", "casual", "professional", "friendly", "inspirational"]).describe("Tone of the content"),
+  wordCount: z.number().describe("Approximate word count"),
+  // Source tracking
+  keySourcePoints: z.array(z.string()).describe("Key points from voice context used"),
+  // Language
+  language: z.string().describe("Language of the content")
+});
+const outputGeneratedContentTool = createTool({
+  id: "output-generated-content",
+  description: "Output the generated content with all metadata",
+  inputSchema: GeneratedContentSchema,
+  outputSchema: z.object({
+    success: z.boolean(),
+    wordCount: z.number(),
+    hasAlternatives: z.boolean()
+  }),
+  execute: async (content) => {
+    return {
+      success: true,
+      wordCount: content.wordCount,
+      hasAlternatives: (content.alternativeVersions?.length || 0) > 0
+    };
+  }
+});
+function getFormatGuidelines(contentType) {
+  const guidelines = {
+    social_post: `- Keep it concise (under 280 chars for X, longer for LinkedIn)
+- Use engaging hooks
+- Include relevant hashtags
+- Consider emoji usage
+- End with call-to-action or thought-provoking question
+- Generate 3-5 alternative versions with different angles`,
+    email: `- Clear subject line suggestion
+- Professional greeting
+- Concise body with clear purpose
+- Bullet points for key items
+- Professional closing
+- Appropriate tone for recipient`,
+    report: `- Clear title and date
+- Executive summary at top
+- Structured sections with headers
+- Key findings/observations
+- Data points where available
+- Conclusions/recommendations
+- Professional formatting`,
+    summary: `- Brief overview first
+- Key points in bullet format
+- Important details highlighted
+- Action items if any
+- Concise and scannable`,
+    memo: `- TO/FROM/DATE/SUBJECT header
+- Clear purpose statement
+- Key points
+- Action required if any
+- Keep it focused`,
+    shift_report: `- Shift date and time
+- Patient/client summaries
+- Key events and observations
+- Medications/treatments given
+- Issues to follow up
+- Handoff notes for next shift`,
+    sermon_notes: `- Scripture references
+- Main theme/message
+- Key points to cover
+- Stories/illustrations
+- Application points
+- Prayer points`,
+    repair_log: `- Customer/vehicle info
+- Problem description
+- Diagnosis findings
+- Work performed
+- Parts used
+- Recommendations`,
+    meeting_notes: `- Date, attendees, purpose
+- Key discussion points
+- Decisions made
+- Action items with owners
+- Next steps
+- Follow-up date if set`,
+    default: `- Clear structure appropriate to content
+- Professional formatting
+- Key points highlighted
+- Actionable where relevant`
+  };
+  return guidelines[contentType.toLowerCase()] || guidelines.default;
+}
+async function generateContentAgentPrompt(userContext, voiceContext, contentRequest, languageOverride) {
+  const outputLanguage = languageOverride || userContext.language;
+  const languageName = LANGUAGE_NAMES$1[outputLanguage] || "English";
+  const profession = userContext.profession?.name || "professional";
+  const formatGuidelines = getFormatGuidelines(contentRequest.contentType);
+  return `You are a professional content creator that generates high-quality ${contentRequest.contentType} content.
+
+## YOUR MISSION
+Generate ${contentRequest.contentType} content based on the user's voice recordings and context.
+
+## USER CONTEXT
+- **Name**: ${userContext.preferredName}
+- **Language**: ${languageName} (${outputLanguage})
+- **Profession**: ${profession}
+- **Requested Content Type**: ${contentRequest.contentType}
+- **Description**: ${contentRequest.description}
+${contentRequest.targetPlatform ? `- **Target Platform**: ${contentRequest.targetPlatform}` : ""}
+${contentRequest.additionalInstructions ? `- **Additional Instructions**: ${contentRequest.additionalInstructions}` : ""}
+
+## VOICE CONTEXT (Source Material)
+${voiceContext || "No voice context provided."}
+
+## FORMAT GUIDELINES FOR ${contentRequest.contentType.toUpperCase()}
+${formatGuidelines}
+
+## PROFESSION-SPECIFIC STYLE
+As content for a ${profession}, ensure:
+- Appropriate terminology for the field
+- Relevant professional context
+- Suitable formality level
+- Industry-standard formatting
+
+## CONTENT GENERATION RULES
+
+1. **Extract relevant information** from the voice context
+2. **Synthesize** into coherent, well-structured content
+3. **Adapt format** based on content type and profession
+4. **Generate alternatives** for social posts (3-5 versions)
+5. **Include appropriate tags** extracted from content
+6. **All content must be in ${languageName}**
+
+## LANGUAGE REQUIREMENT
+**CRITICAL**: All generated content MUST be in ${languageName}.
+- Title: in ${languageName}
+- Content: in ${languageName}
+- Tags: in ${languageName}
+- Preview: in ${languageName}
+- Alternative versions: in ${languageName}
+
+## OUTPUT
+Use the output-generated-content tool to return the generated content with:
+- title: Clear, descriptive title
+- contentType: "${contentRequest.contentType}"
+- content: Full generated content
+- previewText: First 200 chars
+- alternativeVersions: Alternative versions if applicable
+- tags: Relevant tags
+- tone: Detected/appropriate tone
+- wordCount: Approximate word count
+- keySourcePoints: Key points used from voice context
+- language: "${outputLanguage}"`;
+}
+async function createContentAgent(userContext, voiceContext, contentRequest, languageOverride) {
+  const instructions = await generateContentAgentPrompt(
+    userContext,
+    voiceContext,
+    contentRequest,
+    languageOverride
+  );
+  return new Agent({
+    id: "dynamic-content-agent",
+    name: "Dynamic Content Agent",
+    instructions,
+    model: "openai/gpt-4o",
+    tools: {
+      outputGeneratedContent: outputGeneratedContentTool
+    }
+  });
+}
+async function generateContent(userContext, voiceContext, contentRequest, languageOverride) {
+  const agent = await createContentAgent(
+    userContext,
+    voiceContext,
+    contentRequest,
+    languageOverride
+  );
+  const languageName = LANGUAGE_NAMES$1[languageOverride || userContext.language] || "English";
+  const prompt = `Generate ${contentRequest.contentType} content based on the voice context provided.
+
+## REQUEST
+- Content Type: ${contentRequest.contentType}
+- Description: ${contentRequest.description}
+${contentRequest.targetPlatform ? `- Target Platform: ${contentRequest.targetPlatform}` : ""}
+${contentRequest.additionalInstructions ? `- Additional Instructions: ${contentRequest.additionalInstructions}` : ""}
+
+## INSTRUCTIONS
+1. Review the voice context in my instructions
+2. Extract relevant information for this content type
+3. Generate professional, well-formatted content
+4. For social posts, generate 3-5 alternative versions
+5. Extract appropriate tags
+
+Use the output-generated-content tool to return the content.
+ALL content must be in ${languageName}.`;
+  const response = await agent.generate(prompt);
+  const toolCalls = response.toolCalls || [];
+  const contentCall = toolCalls.find(
+    (call) => call.toolName === "output-generated-content" || call.toolName === "outputGeneratedContent"
+  );
+  if (contentCall?.args) {
+    try {
+      const args = typeof contentCall.args === "string" ? JSON.parse(contentCall.args) : contentCall.args;
+      return args;
+    } catch {
+      console.error("[generateContent] Failed to parse tool call args");
+    }
+  }
+  return {
+    title: "Generated Content",
+    contentType: contentRequest.contentType,
+    content: response.text || "Unable to generate content",
+    previewText: (response.text || "").substring(0, 200),
+    tags: [],
+    tone: "professional",
+    wordCount: (response.text || "").split(/\s+/).length,
+    keySourcePoints: [],
+    language: languageOverride || userContext.language
+  };
+}
+const contentAgent = new Agent({
+  id: "dynamic-content-agent",
+  name: "Dynamic Content Agent",
+  instructions: `You are a professional content creator that generates high-quality content.
+Adapt your output format based on the content type requested.
+Use the output-generated-content tool to return structured content.`,
+  model: "openai/gpt-4o",
+  tools: {
+    outputGeneratedContent: outputGeneratedContentTool
+  }
+});
+
+var contentAgent$1 = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  GeneratedContentSchema: GeneratedContentSchema,
+  contentAgent: contentAgent,
+  createContentAgent: createContentAgent,
+  generateContent: generateContent,
+  generateContentAgentPrompt: generateContentAgentPrompt,
+  outputGeneratedContentTool: outputGeneratedContentTool
+});
+
 const ReminderPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
 const ReminderTypeSchema = z.enum(["task", "todo", "reminder"]);
-function getSupabaseClient() {
+function getSupabaseClient$1() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -1017,7 +1613,7 @@ const createReminderTool = createTool({
       sourceRecordingId
     });
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseClient$1();
       const parsedTime = parseSmartTime(reminderTime);
       if (!parsedTime) {
         console.error("[createReminderTool] Failed to parse time", {
@@ -1142,7 +1738,7 @@ const getRemindersTool = createTool({
   }),
   execute: async ({ userId, priority, type, includeCompleted, limit }) => {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseClient$1();
       let query = supabase.from("reminders").select("*").eq("user_id", userId).order("reminder_time", { ascending: true }).limit(limit);
       if (!includeCompleted) {
         query = query.eq("is_completed", false);
@@ -1226,7 +1822,7 @@ createTool({
     recurrencePattern
   }) => {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseClient$1();
       const updates = {};
       if (title !== void 0) updates.title = title;
       if (description !== void 0) updates.description = description;
@@ -1271,7 +1867,7 @@ createTool({
         import('@/lib/mastra/pattern-learning').then(({ analyzeReminderPatterns }) => {
           import('@/lib/mastra/pattern-storage').then(({ savePattern }) => {
             import('@/lib/dashboard/types').then(({ Reminder }) => {
-              getSupabaseClient().from("reminders").select("*").eq("id", reminderId).single().then(({ data: updatedReminder }) => {
+              getSupabaseClient$1().from("reminders").select("*").eq("id", reminderId).single().then(({ data: updatedReminder }) => {
                 if (updatedReminder) {
                   const reminderObj = {
                     id: updatedReminder.id,
@@ -1494,6 +2090,295 @@ const applyPatternsTool = createTool({
   }
 });
 
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Missing Supabase environment variables");
+  }
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+const createAIDocumentTool = createTool({
+  id: "create-ai-document",
+  description: "Creates a new AI-generated document and saves it to the database",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID"),
+    title: z.string().describe("Document title"),
+    documentType: z.string().describe("Type of document: post, email, report, summary, etc."),
+    content: z.string().describe("Full content of the document"),
+    previewText: z.string().optional().describe("Preview text (first 200 chars)"),
+    sourceVoiceNoteIds: z.array(z.string()).optional().describe("Source voice recording IDs"),
+    sourceFileIds: z.array(z.string()).optional().describe("Source file IDs"),
+    language: z.string().default("en").describe("Language of the content"),
+    tags: z.array(z.string()).optional().describe("Tags for categorization"),
+    professionContext: z.string().optional().describe("Profession that influenced generation"),
+    confidenceScore: z.number().optional().describe("AI confidence score 0-1"),
+    generationType: z.enum(["explicit", "proactive", "suggestion"]).default("explicit").describe("How this was generated"),
+    modelUsed: z.string().optional().describe("AI model that generated this"),
+    tokensUsed: z.number().optional().describe("Tokens used for generation")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    documentId: z.string().optional(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    const preview = input.previewText || input.content.substring(0, 200);
+    const { data, error } = await supabase.from("ai_documents").insert({
+      user_id: input.userId,
+      title: input.title,
+      document_type: input.documentType,
+      content: input.content,
+      preview_text: preview,
+      source_voice_note_ids: input.sourceVoiceNoteIds || [],
+      source_file_ids: input.sourceFileIds || [],
+      language: input.language,
+      tags: input.tags || [],
+      profession_context: input.professionContext,
+      confidence_score: input.confidenceScore,
+      generation_type: input.generationType,
+      model_used: input.modelUsed,
+      tokens_used: input.tokensUsed,
+      status: "ready"
+    }).select("id").single();
+    if (error) {
+      console.error("[createAIDocumentTool] Error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, documentId: data.id };
+  }
+});
+const getAIDocumentsTool = createTool({
+  id: "get-ai-documents",
+  description: "Fetches AI-generated documents for a user with optional filters",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID"),
+    documentType: z.string().optional().describe("Filter by document type"),
+    status: z.enum(["generating", "ready", "failed", "archived"]).optional().describe("Filter by status"),
+    generationType: z.enum(["explicit", "proactive", "suggestion"]).optional().describe("Filter by generation type"),
+    limit: z.number().default(20).describe("Maximum number of documents to return"),
+    offset: z.number().default(0).describe("Offset for pagination")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    documents: z.array(z.object({
+      id: z.string(),
+      title: z.string(),
+      documentType: z.string(),
+      content: z.string(),
+      previewText: z.string().nullable(),
+      status: z.string(),
+      language: z.string(),
+      tags: z.array(z.string()),
+      generationType: z.string(),
+      confidenceScore: z.number().nullable(),
+      generatedAt: z.string()
+    })),
+    total: z.number(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    let query = supabase.from("ai_documents").select("*", { count: "exact" }).eq("user_id", input.userId).order("generated_at", { ascending: false }).range(input.offset, input.offset + input.limit - 1);
+    if (input.documentType) {
+      query = query.eq("document_type", input.documentType);
+    }
+    if (input.status) {
+      query = query.eq("status", input.status);
+    }
+    if (input.generationType) {
+      query = query.eq("generation_type", input.generationType);
+    }
+    const { data, error, count } = await query;
+    if (error) {
+      console.error("[getAIDocumentsTool] Error:", error);
+      return { success: false, documents: [], total: 0, error: error.message };
+    }
+    const documents = (data || []).map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      documentType: doc.document_type,
+      content: doc.content,
+      previewText: doc.preview_text,
+      status: doc.status,
+      language: doc.language,
+      tags: doc.tags || [],
+      generationType: doc.generation_type,
+      confidenceScore: doc.confidence_score,
+      generatedAt: doc.generated_at
+    }));
+    return { success: true, documents, total: count || 0 };
+  }
+});
+const updateAIDocumentTool = createTool({
+  id: "update-ai-document",
+  description: "Updates an AI-generated document",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID (for verification)"),
+    documentId: z.string().describe("Document ID to update"),
+    title: z.string().optional().describe("New title"),
+    content: z.string().optional().describe("New content"),
+    status: z.enum(["generating", "ready", "failed", "archived"]).optional().describe("New status"),
+    tags: z.array(z.string()).optional().describe("New tags")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    const updateData = {};
+    if (input.title) updateData.title = input.title;
+    if (input.content) {
+      updateData.content = input.content;
+      updateData.preview_text = input.content.substring(0, 200);
+    }
+    if (input.status) updateData.status = input.status;
+    if (input.tags) updateData.tags = input.tags;
+    const { error } = await supabase.from("ai_documents").update(updateData).eq("id", input.documentId).eq("user_id", input.userId);
+    if (error) {
+      console.error("[updateAIDocumentTool] Error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+});
+const deleteAIDocumentTool = createTool({
+  id: "delete-ai-document",
+  description: "Deletes an AI-generated document",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID (for verification)"),
+    documentId: z.string().describe("Document ID to delete")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("ai_documents").delete().eq("id", input.documentId).eq("user_id", input.userId);
+    if (error) {
+      console.error("[deleteAIDocumentTool] Error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+});
+const archiveAIDocumentTool = createTool({
+  id: "archive-ai-document",
+  description: "Archives an AI-generated document (soft delete)",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID (for verification)"),
+    documentId: z.string().describe("Document ID to archive")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("ai_documents").update({ status: "archived" }).eq("id", input.documentId).eq("user_id", input.userId);
+    if (error) {
+      console.error("[archiveAIDocumentTool] Error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+});
+const getAIDocumentByIdTool = createTool({
+  id: "get-ai-document-by-id",
+  description: "Fetches a single AI-generated document by ID",
+  inputSchema: z.object({
+    userId: z.string().describe("User ID (for verification)"),
+    documentId: z.string().describe("Document ID")
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    document: z.object({
+      id: z.string(),
+      title: z.string(),
+      documentType: z.string(),
+      content: z.string(),
+      previewText: z.string().nullable(),
+      status: z.string(),
+      language: z.string(),
+      tags: z.array(z.string()),
+      sourceVoiceNoteIds: z.array(z.string()),
+      sourceFileIds: z.array(z.string()),
+      professionContext: z.string().nullable(),
+      confidenceScore: z.number().nullable(),
+      generationType: z.string(),
+      version: z.number(),
+      generatedAt: z.string(),
+      updatedAt: z.string()
+    }).optional(),
+    error: z.string().optional()
+  }),
+  execute: async (input) => {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.from("ai_documents").select("*").eq("id", input.documentId).eq("user_id", input.userId).single();
+    if (error) {
+      console.error("[getAIDocumentByIdTool] Error:", error);
+      return { success: false, error: error.message };
+    }
+    if (!data) {
+      return { success: false, error: "Document not found" };
+    }
+    return {
+      success: true,
+      document: {
+        id: data.id,
+        title: data.title,
+        documentType: data.document_type,
+        content: data.content,
+        previewText: data.preview_text,
+        status: data.status,
+        language: data.language,
+        tags: data.tags || [],
+        sourceVoiceNoteIds: data.source_voice_note_ids || [],
+        sourceFileIds: data.source_file_ids || [],
+        professionContext: data.profession_context,
+        confidenceScore: data.confidence_score,
+        generationType: data.generation_type,
+        version: data.version,
+        generatedAt: data.generated_at,
+        updatedAt: data.updated_at
+      }
+    };
+  }
+});
+async function saveGeneratedContent(userId, content, metadata = {}) {
+  const result = await createAIDocumentTool.execute?.({
+    userId,
+    title: content.title,
+    documentType: content.contentType,
+    content: content.content,
+    previewText: content.previewText,
+    sourceVoiceNoteIds: metadata.sourceVoiceNoteIds,
+    sourceFileIds: metadata.sourceFileIds,
+    language: content.language || "en",
+    tags: content.tags,
+    professionContext: metadata.professionContext,
+    confidenceScore: metadata.confidenceScore,
+    generationType: metadata.generationType || "explicit",
+    modelUsed: metadata.modelUsed,
+    tokensUsed: metadata.tokensUsed
+  });
+  return result || { success: false, error: "Tool execution failed" };
+}
+
+var contentGenerationTool = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  archiveAIDocumentTool: archiveAIDocumentTool,
+  createAIDocumentTool: createAIDocumentTool,
+  deleteAIDocumentTool: deleteAIDocumentTool,
+  getAIDocumentByIdTool: getAIDocumentByIdTool,
+  getAIDocumentsTool: getAIDocumentsTool,
+  saveGeneratedContent: saveGeneratedContent,
+  updateAIDocumentTool: updateAIDocumentTool
+});
+
 const LANGUAGE_NAMES = {
   en: "English",
   es: "Spanish",
@@ -1610,7 +2495,8 @@ const VoiceProcessingInputSchema = z.object({
   audioUrl: z.string().optional().describe("URL of the audio file"),
   audioBase64: z.string().optional().describe("Base64-encoded audio"),
   mimeType: z.enum(["audio/webm", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/wav", "audio/ogg", "audio/flac"]).default("audio/webm"),
-  sourceRecordingId: z.string().optional().describe("ID of the source recording")
+  sourceRecordingId: z.string().optional().describe("ID of the source recording"),
+  skipSaveItems: z.boolean().optional().describe("Skip saving extracted items to database")
 });
 const VoiceProcessingOutputSchema = z.object({
   success: z.boolean(),
@@ -1640,6 +2526,8 @@ const VoiceProcessingOutputSchema = z.object({
     })),
     summary: z.string()
   }).optional(),
+  userId: z.string().optional(),
+  sourceRecordingId: z.string().optional(),
   error: z.string().optional()
 });
 const transcribeStep = createStep({
@@ -1653,7 +2541,8 @@ const transcribeStep = createStep({
     duration: z.number().optional(),
     error: z.string().optional(),
     userId: z.string(),
-    sourceRecordingId: z.string().optional()
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   execute: async ({ inputData }) => {
     const result = await transcribeAudioTool.execute?.({
@@ -1668,7 +2557,8 @@ const transcribeStep = createStep({
       duration: result?.duration,
       error: result?.error,
       userId: inputData.userId,
-      sourceRecordingId: inputData.sourceRecordingId
+      sourceRecordingId: inputData.sourceRecordingId,
+      skipSaveItems: inputData.skipSaveItems
     };
   }
 });
@@ -1682,7 +2572,8 @@ const cleanTranscriptionStep = createStep({
     duration: z.number().optional(),
     error: z.string().optional(),
     userId: z.string(),
-    sourceRecordingId: z.string().optional()
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -1692,7 +2583,8 @@ const cleanTranscriptionStep = createStep({
     duration: z.number().optional(),
     error: z.string().optional(),
     userId: z.string(),
-    sourceRecordingId: z.string().optional()
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   execute: async ({ inputData }) => {
     if (!inputData.success || !inputData.text) {
@@ -1701,7 +2593,8 @@ const cleanTranscriptionStep = createStep({
         rawText: inputData.text,
         error: inputData.error || "Transcription failed",
         userId: inputData.userId,
-        sourceRecordingId: inputData.sourceRecordingId
+        sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems
       };
     }
     try {
@@ -1714,7 +2607,8 @@ const cleanTranscriptionStep = createStep({
         language: inputData.language,
         duration: inputData.duration,
         userId: inputData.userId,
-        sourceRecordingId: inputData.sourceRecordingId
+        sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems
       };
     } catch (err) {
       return {
@@ -1724,7 +2618,8 @@ const cleanTranscriptionStep = createStep({
         language: inputData.language,
         duration: inputData.duration,
         userId: inputData.userId,
-        sourceRecordingId: inputData.sourceRecordingId
+        sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems
       };
     }
   }
@@ -1740,7 +2635,8 @@ const extractItemsStep = createStep({
     duration: z.number().optional(),
     error: z.string().optional(),
     userId: z.string(),
-    sourceRecordingId: z.string().optional()
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -1749,7 +2645,8 @@ const extractItemsStep = createStep({
     extractedItems: z.any().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
-    error: z.string().optional()
+    error: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   execute: async ({ inputData }) => {
     if (!inputData.success || !inputData.cleanedText) {
@@ -1950,7 +2847,8 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         language: inputData.language,
         extractedItems,
         userId: inputData.userId,
-        sourceRecordingId: inputData.sourceRecordingId
+        sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems
       };
     } catch (err) {
       console.error("[extractItemsStep] Exception during extraction", {
@@ -1966,7 +2864,8 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         transcription: inputData.cleanedText,
         error: err instanceof Error ? err.message : "Failed to extract items",
         userId: inputData.userId,
-        sourceRecordingId: inputData.sourceRecordingId
+        sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems
       };
     }
   }
@@ -1981,14 +2880,29 @@ const saveItemsStep = createStep({
     extractedItems: z.any().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
-    error: z.string().optional()
+    error: z.string().optional(),
+    skipSaveItems: z.boolean().optional()
   }),
   outputSchema: VoiceProcessingOutputSchema,
   execute: async ({ inputData }) => {
+    if (inputData.skipSaveItems) {
+      console.log("[saveItemsStep] Skipping save due to skipSaveItems flag");
+      return {
+        success: inputData.success,
+        transcription: inputData.transcription,
+        language: inputData.language,
+        extractedItems: inputData.extractedItems,
+        error: inputData.error,
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId
+      };
+    }
     if (!inputData.success || !inputData.extractedItems) {
       return {
         success: false,
-        error: inputData.error || "No items to save"
+        error: inputData.error || "No items to save",
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId
       };
     }
     const items = inputData.extractedItems;
@@ -2299,7 +3213,9 @@ ${formattedContent}`;
             content: n.content
           })),
           summary: formattedSummary
-        }
+        },
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId
       };
     } catch (err) {
       console.error("[saveItemsStep] Error saving items", {
@@ -2311,17 +3227,276 @@ ${formattedContent}`;
       return {
         success: false,
         transcription: inputData.transcription,
-        error: err instanceof Error ? err.message : "Failed to save items"
+        error: err instanceof Error ? err.message : "Failed to save items",
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId
       };
     }
   }
 });
+createStep({
+  id: "smart-analysis",
+  description: "Analyze transcription for content generation opportunities",
+  inputSchema: VoiceProcessingOutputSchema,
+  outputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    // Smart analysis results
+    smartAnalysis: z.object({
+      extractionNeeded: z.boolean(),
+      contentPredictions: z.array(z.object({
+        contentType: z.string(),
+        description: z.string(),
+        confidence: z.number(),
+        reasoning: z.string(),
+        suggestedTitle: z.string().optional(),
+        targetPlatform: z.string().optional(),
+        priority: z.enum(["high", "medium", "low"])
+      })),
+      conversationInsights: z.object({
+        mainTopics: z.array(z.string()),
+        entities: z.array(z.string()),
+        sentiment: z.string(),
+        urgency: z.string()
+      }),
+      detectedLanguage: z.string().optional(),
+      explicitLanguageRequest: z.string().optional(),
+      analysisNotes: z.string()
+    }).optional()
+  }),
+  execute: async ({ inputData }) => {
+    if (!inputData.success || !inputData.transcription) {
+      return {
+        ...inputData,
+        smartAnalysis: void 0
+      };
+    }
+    try {
+      const { analyzeTranscription } = await Promise.resolve().then(function () { return smartAgent$1; });
+      const { getFullVoiceContext } = await import('./voice-context.mjs');
+      const { getFullUserContext } = await import('./tools/92f9a2f3-43c1-4e8a-9f6e-614731881d5c.mjs');
+      const userId = inputData.userId;
+      if (!userId) {
+        console.warn("[smartAnalysisStep] No userId, skipping smart analysis");
+        return { ...inputData, smartAnalysis: void 0 };
+      }
+      const [userContext, voiceContext] = await Promise.all([
+        getFullUserContext(userId),
+        getFullVoiceContext(userId)
+      ]);
+      const analysis = await analyzeTranscription(
+        inputData.transcription,
+        userContext,
+        voiceContext.combinedContext
+      );
+      console.log("[smartAnalysisStep] Analysis complete", {
+        userId,
+        predictionsCount: analysis.contentPredictions.length,
+        mainTopics: analysis.conversationInsights.mainTopics
+      });
+      return {
+        ...inputData,
+        userId,
+        smartAnalysis: analysis
+      };
+    } catch (err) {
+      console.error("[smartAnalysisStep] Error in smart analysis", {
+        error: err instanceof Error ? err.message : "Unknown error"
+      });
+      return {
+        ...inputData,
+        smartAnalysis: void 0
+      };
+    }
+  }
+});
+const generateContentStep = createStep({
+  id: "generate-content",
+  description: "Generate content based on smart analysis predictions",
+  inputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional()
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string()
+    })).optional()
+  }),
+  execute: async ({ inputData }) => {
+    const userId = inputData.userId;
+    const extractedItems = inputData.extractedItems;
+    if (!userId || !extractedItems) {
+      return { ...inputData, generatedContent: [] };
+    }
+    const predictions = extractedItems.contentPredictions || [];
+    const highConfidencePredictions = predictions.filter(
+      (p) => p.confidence >= 0.5
+    );
+    if (highConfidencePredictions.length === 0) {
+      console.log("[generateContentStep] No high-confidence predictions, skipping");
+      return { ...inputData, generatedContent: [] };
+    }
+    try {
+      const { generateContent } = await Promise.resolve().then(function () { return contentAgent$1; });
+      const { saveGeneratedContent } = await Promise.resolve().then(function () { return contentGenerationTool; });
+      const { getFullVoiceContext } = await import('./voice-context.mjs');
+      const { getFullUserContext } = await import('./tools/92f9a2f3-43c1-4e8a-9f6e-614731881d5c.mjs');
+      const [userContext, voiceContext] = await Promise.all([
+        getFullUserContext(userId),
+        getFullVoiceContext(userId)
+      ]);
+      const predictionsToGenerate = highConfidencePredictions.slice(0, 3);
+      const generatedContent = [];
+      for (const prediction of predictionsToGenerate) {
+        try {
+          const content = await generateContent(
+            userContext,
+            voiceContext.combinedContext,
+            {
+              contentType: prediction.contentType,
+              description: prediction.description,
+              targetPlatform: prediction.targetPlatform
+            }
+          );
+          const saveResult = await saveGeneratedContent(
+            userId,
+            {
+              title: content.title || prediction.suggestedTitle || `${prediction.contentType} Draft`,
+              contentType: prediction.contentType,
+              content: content.content,
+              previewText: content.previewText,
+              tags: content.tags,
+              language: content.language
+            },
+            {
+              sourceVoiceNoteIds: inputData.sourceRecordingId ? [inputData.sourceRecordingId] : [],
+              professionContext: userContext.profession?.name,
+              confidenceScore: prediction.confidence,
+              generationType: prediction.confidence >= 0.8 ? "explicit" : "proactive",
+              modelUsed: "gpt-4o"
+            }
+          );
+          generatedContent.push({
+            documentId: saveResult.documentId,
+            title: content.title,
+            contentType: prediction.contentType,
+            previewText: content.previewText,
+            status: saveResult.success ? "ready" : "failed"
+          });
+          console.log("[generateContentStep] Content generated and saved", {
+            documentId: saveResult.documentId,
+            contentType: prediction.contentType,
+            title: content.title
+          });
+        } catch (contentErr) {
+          console.error("[generateContentStep] Failed to generate content", {
+            contentType: prediction.contentType,
+            error: contentErr instanceof Error ? contentErr.message : "Unknown error"
+          });
+        }
+      }
+      return { ...inputData, generatedContent };
+    } catch (err) {
+      console.error("[generateContentStep] Error generating content", {
+        error: err instanceof Error ? err.message : "Unknown error"
+      });
+      return { ...inputData, generatedContent: [] };
+    }
+  }
+});
+const notifyContentStep = createStep({
+  id: "notify-content",
+  description: "Send notifications for generated content",
+  inputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    generatedContent: z.array(z.any()).optional()
+  }),
+  outputSchema: VoiceProcessingOutputSchema.extend({
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string()
+    })).optional()
+  }),
+  execute: async ({ inputData }) => {
+    const generatedContent = inputData.generatedContent || [];
+    const userId = inputData.userId;
+    if (generatedContent.length === 0 || !userId) {
+      return inputData;
+    }
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        for (const content of generatedContent) {
+          if (content.documentId && content.status === "ready") {
+            await supabase.from("notifications").insert({
+              user_id: userId,
+              title: "New Content Ready",
+              message: `I drafted a ${content.contentType}: "${content.title}"`,
+              type: "ai_generated",
+              related_document_id: content.documentId,
+              deep_link: `/dashboard/pro?doc=${content.documentId}`
+            });
+          }
+        }
+        console.log("[notifyContentStep] Notifications created", {
+          count: generatedContent.filter((c) => c.status === "ready").length
+        });
+      }
+    } catch (err) {
+      console.error("[notifyContentStep] Failed to create notifications", {
+        error: err instanceof Error ? err.message : "Unknown error"
+      });
+    }
+    return inputData;
+  }
+});
 const voiceProcessingWorkflow = createWorkflow({
   id: "voice-processing-workflow",
-  description: "Transcribes audio and extracts actionable items",
+  description: "Transcribes audio, extracts actionable items, and generates predicted content",
   inputSchema: VoiceProcessingInputSchema,
-  outputSchema: VoiceProcessingOutputSchema
-}).then(transcribeStep).then(cleanTranscriptionStep).then(extractItemsStep).then(saveItemsStep).commit();
+  outputSchema: VoiceProcessingOutputSchema.extend({
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string()
+    })).optional()
+  })
+}).then(transcribeStep).then(cleanTranscriptionStep).then(extractItemsStep).then(saveItemsStep).then(generateContentStep).then(notifyContentStep).commit();
 
 const HealthAnalysisInputSchema = z.object({
   userId: z.string().describe("User ID"),
@@ -2710,12 +3885,35 @@ const dailySummaryWorkflow = createWorkflow({
 }).then(gatherDataStep).then(generateSummaryStep).commit();
 
 z.object({
+  // Basic user context
   preferredName: z.string().describe("User's preferred name"),
   language: z.string().describe("User's preferred language code"),
   lastTopic: z.string().optional().describe("The last topic discussed"),
-  mood: z.enum(["positive", "neutral", "stressed", "tired", "motivated"]).optional().describe("Detected user mood"),
+  mood: z.enum(["positive", "neutral", "stressed", "tired", "motivated", "excited"]).optional().describe("Detected user mood"),
   pendingActions: z.array(z.string()).optional().describe("Actions the user mentioned but haven't been created as tasks"),
   importantDetails: z.array(z.string()).optional().describe("Important details mentioned in conversation"),
+  // Onboarding context
+  onboardingContext: z.object({
+    profession: z.string().optional().describe("User's profession"),
+    criticalArtifacts: z.array(z.string()).optional().describe("Critical documents/artifacts for this profession"),
+    socialPlatforms: z.array(z.string()).optional().describe("User's preferred social platforms"),
+    newsFocus: z.array(z.string()).optional().describe("User's news/information focus areas"),
+    healthInterests: z.array(z.string()).optional().describe("User's health interests")
+  }).optional().describe("Context from user onboarding"),
+  // Voice history context
+  voiceHistory: z.object({
+    todayTopics: z.array(z.string()).optional().describe("Main topics from today's voice recordings"),
+    todayRecordingCount: z.number().optional().describe("Number of recordings today"),
+    weekSummary: z.string().optional().describe("Summary of past week's voice recordings"),
+    monthThemes: z.array(z.string()).optional().describe("Major themes from past month")
+  }).optional().describe("Voice recording history context"),
+  // Content generation context
+  contentGeneration: z.object({
+    recentDocuments: z.array(z.string()).optional().describe("Recently generated document titles"),
+    preferredContentTypes: z.array(z.string()).optional().describe("User's preferred content types"),
+    generationPreferences: z.string().optional().describe("User's content generation preferences")
+  }).optional().describe("Content generation history and preferences"),
+  // Task patterns (existing)
   taskPatterns: z.object({
     preferredTimes: z.array(z.string()).optional().describe("Preferred times for creating/completing tasks"),
     commonCategories: z.array(z.string()).optional().describe("Most commonly used task categories"),
@@ -2723,6 +3921,7 @@ z.object({
     completionHabits: z.string().optional().describe("User's completion habits and patterns"),
     recurringItems: z.array(z.string()).optional().describe("Detected recurring tasks")
   }).optional().describe("Learned patterns from user's task behavior"),
+  // Reminder patterns (existing)
   reminderPatterns: z.object({
     preferredTimes: z.array(z.string()).optional().describe("Preferred times for reminders"),
     commonTags: z.array(z.string()).optional().describe("Most commonly used reminder tags"),
@@ -2744,7 +3943,9 @@ const mastra = new Mastra({
     saydoAgent,
     voiceAgent,
     taskAgent,
-    healthAgent
+    healthAgent,
+    smartAgent,
+    contentAgent
   },
   tools: {
     // User profile
@@ -2768,7 +3969,14 @@ const mastra = new Mastra({
     // Pattern Learning
     learnPatterns: learnPatternsTool,
     getPatterns: getPatternsTool,
-    applyPatterns: applyPatternsTool
+    applyPatterns: applyPatternsTool,
+    // Content Generation
+    createAIDocument: createAIDocumentTool,
+    getAIDocuments: getAIDocumentsTool,
+    updateAIDocument: updateAIDocumentTool,
+    deleteAIDocument: deleteAIDocumentTool,
+    archiveAIDocument: archiveAIDocumentTool,
+    getAIDocumentById: getAIDocumentByIdTool
   },
   workflows: {
     voiceProcessingWorkflow,

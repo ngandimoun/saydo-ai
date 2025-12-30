@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Upload, FileText, Image, File, Check, Loader2, Sheet, Presentation } from "lucide-react"
+import { X, Upload, FileText, Image, File, Check, Loader2, Sheet, Presentation, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -35,6 +37,8 @@ interface SelectedFile {
   preview?: string
   state: UploadState
   error?: string
+  customName?: string
+  description?: string
 }
 
 // Accepted file types (excluding video)
@@ -106,6 +110,7 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [expandedFiles, setExpandedFiles] = useState<Set<number>>(new Set())
 
   // Handle file selection
   const handleFiles = useCallback((files: FileList | null) => {
@@ -166,6 +171,32 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
       updated.splice(index, 1)
       return updated
     })
+    // Remove from expanded set if present
+    setExpandedFiles(prev => {
+      const updated = new Set(prev)
+      updated.delete(index)
+      return updated
+    })
+  }
+
+  // Toggle metadata expansion for a file
+  const toggleFileExpansion = (index: number) => {
+    setExpandedFiles(prev => {
+      const updated = new Set(prev)
+      if (updated.has(index)) {
+        updated.delete(index)
+      } else {
+        updated.add(index)
+      }
+      return updated
+    })
+  }
+
+  // Update file metadata
+  const updateFileMetadata = (index: number, field: 'customName' | 'description', value: string) => {
+    setSelectedFiles(prev => prev.map((f, idx) => 
+      idx === index ? { ...f, [field]: value } : f
+    ))
   }
 
   // Handle upload
@@ -238,6 +269,8 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
             file_size: sf.file.size,
             status: 'ready',
             uploaded_at: new Date().toISOString(),
+            custom_name: sf.customName?.trim() || null,
+            description: sf.description?.trim() || null,
           })
           .select()
           .single()
@@ -287,6 +320,7 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
         if (sf.preview) URL.revokeObjectURL(sf.preview)
       })
       setSelectedFiles([])
+      setExpandedFiles(new Set())
       setIsUploading(false)
       onClose()
     } else {
@@ -314,6 +348,7 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
       if (sf.preview) URL.revokeObjectURL(sf.preview)
     })
     setSelectedFiles([])
+    setExpandedFiles(new Set())
     onClose()
   }
 
@@ -335,12 +370,12 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="fixed inset-x-4 bottom-4 z-50 max-w-lg mx-auto"
+            className="fixed inset-x-0 bottom-0 sm:inset-x-4 sm:bottom-4 z-50 sm:max-w-lg sm:mx-auto max-h-[90vh] flex flex-col"
           >
-            <div className="bg-card rounded-3xl shadow-2xl overflow-hidden">
+            <div className="bg-card rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-full safe-area-bottom">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <h3 className="font-semibold text-foreground">
+              <div className="flex items-center justify-between p-4 border-b border-border safe-area-top">
+                <h3 className="font-semibold text-foreground text-base sm:text-lg">
                   Upload Work Files
                 </h3>
                 <Button
@@ -348,14 +383,15 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
                   size="icon"
                   onClick={handleClose}
                   disabled={isUploading}
-                  className="rounded-full"
+                  className="rounded-full min-w-[44px] min-h-[44px] touch-manipulation"
+                  aria-label="Close"
                 >
                   <X size={20} />
                 </Button>
               </div>
 
               {/* Content */}
-              <div className="p-4">
+              <div className="p-4 overflow-y-auto flex-1">
                 {/* Drop Zone */}
                 <div
                   onDragOver={(e) => {
@@ -369,7 +405,7 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
                     handleFiles(e.dataTransfer.files)
                   }}
                   className={cn(
-                    "border-2 border-dashed rounded-2xl p-8 text-center transition-colors",
+                    "border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-colors touch-manipulation",
                     isDragging 
                       ? "border-primary bg-primary/5" 
                       : "border-border"
@@ -407,71 +443,132 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
 
                 {/* Selected Files */}
                 {selectedFiles.length > 0 && (
-                  <div className="mt-4 space-y-2 max-h-48 overflow-y-auto">
+                  <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
                     {selectedFiles.map((sf, index) => {
                       const Icon = getFileIcon(sf.file)
+                      const isExpanded = expandedFiles.has(index)
                       
                       return (
                         <motion.div
                           key={index}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          className="flex items-center gap-3 p-3 rounded-xl bg-muted/50"
+                          className="rounded-xl bg-muted/50 overflow-hidden"
                         >
-                          {/* Preview or Icon */}
-                          {sf.preview ? (
-                            <img 
-                              src={sf.preview} 
-                              alt="" 
-                              className="w-10 h-10 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                              <Icon size={18} className="text-blue-500" />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-3 p-3">
+                            {/* Preview or Icon */}
+                            {sf.preview ? (
+                              <img 
+                                src={sf.preview} 
+                                alt="" 
+                                className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                                <Icon size={18} className="text-blue-500" />
+                              </div>
+                            )}
 
-                          {/* File info */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {sf.file.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {(sf.file.size / 1024).toFixed(1)} KB
-                            </p>
-                            {sf.error && (
-                              <p className="text-xs text-red-500 mt-1">
-                                {sf.error}
+                            {/* File info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {sf.file.name}
                               </p>
+                              <p className="text-xs text-muted-foreground">
+                                {(sf.file.size / 1024).toFixed(1)} KB
+                              </p>
+                              {sf.error && (
+                                <p className="text-xs text-red-500 mt-1">
+                                  {sf.error}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Expand/Collapse button (only when idle) */}
+                            {sf.state === 'idle' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => toggleFileExpansion(index)}
+                                className="h-10 w-10 sm:h-8 sm:w-8 rounded-full touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0"
+                                aria-label={isExpanded ? "Collapse" : "Expand"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp size={18} className="sm:w-[14px] sm:h-[14px]" />
+                                ) : (
+                                  <ChevronDown size={18} className="sm:w-[14px] sm:h-[14px]" />
+                                )}
+                              </Button>
+                            )}
+
+                            {/* Status */}
+                            {sf.state === 'idle' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeFile(index)}
+                                className="h-10 w-10 sm:h-8 sm:w-8 rounded-full touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0"
+                                aria-label="Remove file"
+                              >
+                                <X size={18} className="sm:w-[14px] sm:h-[14px]" />
+                              </Button>
+                            )}
+                            {sf.state === 'uploading' && (
+                              <Loader2 size={18} className="text-primary animate-spin" />
+                            )}
+                            {sf.state === 'processing' && (
+                              <span className="text-xs text-primary">Processing...</span>
+                            )}
+                            {sf.state === 'success' && (
+                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <Check size={14} className="text-white" />
+                              </div>
+                            )}
+                            {sf.state === 'error' && (
+                              <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                                <X size={14} className="text-white" />
+                              </div>
                             )}
                           </div>
 
-                          {/* Status */}
-                          {sf.state === 'idle' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeFile(index)}
-                              className="h-8 w-8 rounded-full"
+                          {/* Metadata inputs (expandable) */}
+                          {sf.state === 'idle' && isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="px-3 pb-3 border-t border-border/50 mt-2 pt-3 space-y-3"
                             >
-                              <X size={14} />
-                            </Button>
-                          )}
-                          {sf.state === 'uploading' && (
-                            <Loader2 size={18} className="text-primary animate-spin" />
-                          )}
-                          {sf.state === 'processing' && (
-                            <span className="text-xs text-primary">Processing...</span>
-                          )}
-                          {sf.state === 'success' && (
-                            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                              <Check size={14} className="text-white" />
-                            </div>
-                          )}
-                          {sf.state === 'error' && (
-                            <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
-                              <X size={14} className="text-white" />
-                            </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">
+                                  Custom Name (optional)
+                                </label>
+                                <Input
+                                  placeholder="Leave empty to use original filename"
+                                  value={sf.customName || ''}
+                                  onChange={(e) => updateFileMetadata(index, 'customName', e.target.value)}
+                                  className="h-10 sm:h-8 text-sm touch-manipulation"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  This name will be displayed instead of the filename
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">
+                                  Description (optional)
+                                </label>
+                                <Textarea
+                                  placeholder="Describe this file to help AI understand it..."
+                                  value={sf.description || ''}
+                                  onChange={(e) => updateFileMetadata(index, 'description', e.target.value)}
+                                  className="min-h-[80px] sm:min-h-[60px] text-sm resize-none touch-manipulation"
+                                  rows={3}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Help the AI understand what this file contains
+                                </p>
+                              </div>
+                            </motion.div>
                           )}
                         </motion.div>
                       )
@@ -489,17 +586,19 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
                     <Button
                       onClick={handleUpload}
                       disabled={isUploading || selectedFiles.some(f => f.state === 'uploading' || f.state === 'processing')}
-                      className="w-full rounded-full gap-2"
+                      className="w-full rounded-full gap-2 min-h-[44px] touch-manipulation"
                     >
                       {isUploading ? (
                         <>
-                          <Loader2 size={16} className="animate-spin" />
-                          Uploading...
+                          <Loader2 size={18} className="sm:w-4 sm:h-4 animate-spin" />
+                          <span className="text-sm sm:text-base">Uploading...</span>
                         </>
                       ) : (
                         <>
-                          <Upload size={16} />
-                          Upload {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}
+                          <Upload size={18} className="sm:w-4 sm:h-4" />
+                          <span className="text-sm sm:text-base">
+                            Upload {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}
+                          </span>
                         </>
                       )}
                     </Button>

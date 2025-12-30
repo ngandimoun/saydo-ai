@@ -333,32 +333,43 @@ export interface WorkFile {
   fileSize: number // in bytes
   status: WorkFileStatus
   category?: string // e.g., 'contracts', 'reports', 'presentations'
+  customName?: string // custom display name for the file
+  description?: string // description of the file content/purpose
   uploadedAt: Date
 }
 
-export type AIDocumentType = 'pitch_deck' | 'proposal' | 'report' | 'email_draft' | 'meeting_notes' | 'summary' | 'contract' | 'other'
-export type AIDocumentStatus = 'generating' | 'ready' | 'failed'
+export type AIDocumentStatus = 'generating' | 'ready' | 'failed' | 'archived'
+export type AIGenerationType = 'explicit' | 'proactive' | 'suggestion'
 
 /**
  * AI Generated Document
  * Documents created by AI based on voice notes, files, or requests.
  * 
- * TODO (AI Integration):
- * - Generate documents from voice transcriptions
- * - Create reports from uploaded data
- * - Draft emails and proposals
+ * Supports:
+ * - Dynamic document types (not predefined - adapts to any profession)
+ * - Proactive generation from casual conversation
+ * - Multi-version content (e.g., 5 X post variations)
+ * - Full content storage with preview
  */
 export interface AIDocument {
   id: string
   userId: string
   title: string
-  documentType: AIDocumentType
+  documentType: string // Dynamic - any type (post, email, report, shift_report, sermon_notes, etc.)
   status: AIDocumentStatus
-  contentUrl?: string // URL to generated document
-  previewText?: string // First few lines for preview
+  content: string // Full generated content
+  previewText?: string // First 200 chars for preview
   sourceVoiceNoteIds?: string[] // Voice notes that triggered this
   sourceFileIds?: string[] // Files used as reference
+  language: string // Language of the content
+  tags: string[] // Auto-extracted tags
+  professionContext?: string // Profession that influenced generation
+  confidenceScore?: number // AI confidence 0-1
+  generationType: AIGenerationType // How this was generated
+  version: number // For regenerated versions
+  parentDocumentId?: string // For version tracking
   generatedAt: Date
+  updatedAt?: Date
 }
 
 /**

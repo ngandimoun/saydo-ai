@@ -83,11 +83,26 @@ export default function HomePage() {
 
   // Get user ID for realtime subscriptions
   useEffect(() => {
+    const mountTime = Date.now()
     const getUserId = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserId(user.id)
+      try {
+        const supabase = createClient()
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (user) {
+          setUserId(user.id)
+        } else if (error) {
+          // Suppress errors during initialization (first 3 seconds)
+          const isInitializing = Date.now() - mountTime < 3000
+          if (!isInitializing) {
+            logger.debug('Failed to get user for realtime subscriptions', { error })
+          }
+        }
+      } catch (error) {
+        // Suppress network errors during initialization
+        const isInitializing = Date.now() - mountTime < 3000
+        if (!isInitializing) {
+          logger.debug('Error getting user for realtime subscriptions', { error })
+        }
       }
     }
     getUserId()

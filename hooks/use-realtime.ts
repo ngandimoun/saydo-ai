@@ -21,23 +21,41 @@ export interface UseRealtimeOptions {
 export function useRealtime(options: UseRealtimeOptions) {
   const { table, userId, onInsert, onUpdate, onDelete, enabled = true } = options
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (!enabled || !userId) return
 
     const manager = getRealtimeManager()
 
-    unsubscribeRef.current = manager.subscribe({
-      table,
-      userId,
-      onInsert,
-      onUpdate,
-      onDelete,
-    })
+    // Wait for client to be ready before subscribing
+    const attemptSubscribe = () => {
+      if (manager.isReady()) {
+        unsubscribeRef.current = manager.subscribe({
+          table,
+          userId,
+          onInsert,
+          onUpdate,
+          onDelete,
+        })
 
-    logger.info('Realtime subscription created', { table, userId })
+        logger.info('Realtime subscription created', { table, userId })
+      } else {
+        // Wait a bit and try again
+        readyTimeoutRef.current = setTimeout(() => {
+          attemptSubscribe()
+        }, 500)
+      }
+    }
+
+    // Start subscription attempt
+    attemptSubscribe()
 
     return () => {
+      if (readyTimeoutRef.current) {
+        clearTimeout(readyTimeoutRef.current)
+        readyTimeoutRef.current = null
+      }
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
         unsubscribeRef.current = null

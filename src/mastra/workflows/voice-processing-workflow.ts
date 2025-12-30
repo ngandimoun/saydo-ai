@@ -19,6 +19,7 @@ const VoiceProcessingInputSchema = z.object({
     .enum(["audio/webm", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/wav", "audio/ogg", "audio/flac"])
     .default("audio/webm"),
   sourceRecordingId: z.string().optional().describe("ID of the source recording"),
+  skipSaveItems: z.boolean().optional().describe("Skip saving extracted items to database"),
 });
 
 /**
@@ -52,6 +53,8 @@ const VoiceProcessingOutputSchema = z.object({
     })),
     summary: z.string(),
   }).optional(),
+  userId: z.string().optional(),
+  sourceRecordingId: z.string().optional(),
   error: z.string().optional(),
 });
 
@@ -70,6 +73,7 @@ const transcribeStep = createStep({
     error: z.string().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
     const result = await transcribeAudioTool.execute?.({
@@ -86,6 +90,7 @@ const transcribeStep = createStep({
       error: result?.error,
       userId: inputData.userId,
       sourceRecordingId: inputData.sourceRecordingId,
+      skipSaveItems: inputData.skipSaveItems,
     };
   },
 });
@@ -104,6 +109,7 @@ const cleanTranscriptionStep = createStep({
     error: z.string().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -114,6 +120,7 @@ const cleanTranscriptionStep = createStep({
     error: z.string().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
     if (!inputData.success || !inputData.text) {
@@ -123,6 +130,7 @@ const cleanTranscriptionStep = createStep({
         error: inputData.error || "Transcription failed",
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems,
       };
     }
 
@@ -141,6 +149,7 @@ const cleanTranscriptionStep = createStep({
         duration: inputData.duration,
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems,
       };
     } catch (err) {
       // If cleaning fails, use raw text as fallback
@@ -152,6 +161,7 @@ const cleanTranscriptionStep = createStep({
         duration: inputData.duration,
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems,
       };
     }
   },
@@ -172,6 +182,7 @@ const extractItemsStep = createStep({
     error: z.string().optional(),
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -181,6 +192,7 @@ const extractItemsStep = createStep({
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
     if (!inputData.success || !inputData.cleanedText) {
@@ -199,8 +211,45 @@ const extractItemsStep = createStep({
       // Get user's timezone (falls back to server timezone if not available)
       const userTimezone = await getUserTimezone(inputData.userId);
       
-      // Create voice agent with user context and timezone
-      const agent = await createVoiceAgent(userContext, userTimezone);
+      // Load memory and voice context for correlated understanding
+      const { saydoMemory } = await import("../memory/config");
+      const { getUserMemoryThreadId, initializeOrUpdateUserMemory, updateMemoryWithVoiceContext } = await import("../memory/onboarding-memory");
+      const { getFullVoiceContext } = await import("@/lib/mastra/voice-context");
+      
+      // Get or create memory thread
+      let threadId = await getUserMemoryThreadId(inputData.userId);
+      if (!threadId) {
+        threadId = await initializeOrUpdateUserMemory(inputData.userId);
+      }
+      
+      // Load correlated voice history
+      const voiceContext = await getFullVoiceContext(inputData.userId);
+      
+      // Update memory with latest voice context for correlation
+      // Extract topics from today's recordings (first sentence of each transcription)
+      const todayTopics = voiceContext.today.recordings
+        .map(r => {
+          // Extract first sentence as topic
+          const text = r.transcription || "";
+          const firstSentence = text.split(/[.!?]/)[0]?.trim();
+          return firstSentence || "";
+        })
+        .filter(t => t.length > 0)
+        .slice(0, 10); // Limit to 10 topics
+      
+      await updateMemoryWithVoiceContext(inputData.userId, {
+        todayTopics: todayTopics,
+        todayRecordingCount: voiceContext.today.totalRecordings || 0,
+        weekSummary: voiceContext.pastWeek.summary || "",
+        monthThemes: voiceContext.pastMonth.keyTopics || [],
+      });
+      
+      // Create voice agent with user context, timezone, and memory thread
+      // Agent will automatically load working memory from thread, which includes:
+      // - Full onboarding context (profession, artifacts, platforms)
+      // - Correlated voice history (all today's voices)
+      // - Content generation preferences
+      const agent = await createVoiceAgent(userContext, userTimezone, threadId);
       
       // Extract items from cleaned transcription
       const languageName = userContext.language === 'en' ? 'English' : 
@@ -442,6 +491,7 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         extractedItems,
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems,
       };
     } catch (err) {
       console.error('[extractItemsStep] Exception during extraction', {
@@ -458,6 +508,7 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         error: err instanceof Error ? err.message : "Failed to extract items",
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
+        skipSaveItems: inputData.skipSaveItems,
       };
     }
   },
@@ -477,13 +528,30 @@ const saveItemsStep = createStep({
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
   }),
   outputSchema: VoiceProcessingOutputSchema,
   execute: async ({ inputData }) => {
+    // Skip saving if flag is set
+    if (inputData.skipSaveItems) {
+      console.log('[saveItemsStep] Skipping save due to skipSaveItems flag');
+      return {
+        success: inputData.success,
+        transcription: inputData.transcription,
+        language: inputData.language,
+        extractedItems: inputData.extractedItems,
+        error: inputData.error,
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId,
+      };
+    }
+
     if (!inputData.success || !inputData.extractedItems) {
       return {
         success: false,
         error: inputData.error || "No items to save",
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId,
       };
     }
 
@@ -873,6 +941,8 @@ const saveItemsStep = createStep({
           })),
           summary: formattedSummary,
         },
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId,
       };
     } catch (err) {
       console.error('[saveItemsStep] Error saving items', {
@@ -885,30 +955,354 @@ const saveItemsStep = createStep({
         success: false,
         transcription: inputData.transcription,
         error: err instanceof Error ? err.message : "Failed to save items",
+        userId: inputData.userId,
+        sourceRecordingId: inputData.sourceRecordingId,
       };
     }
   },
 });
 
 /**
- * Voice Processing Workflow
+ * Step 5: Smart proactive analysis (predict content needs)
+ * 
+ * NOTE: This step is no longer used. Content predictions are now extracted
+ * directly by the voice agent in extractItemsStep via contentPredictions field.
+ * This eliminates duplicate processing and improves reliability.
+ */
+// const smartAnalysisStep = createStep({
+  id: "smart-analysis",
+  description: "Analyze transcription for content generation opportunities",
+  inputSchema: VoiceProcessingOutputSchema,
+  outputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    // Smart analysis results
+    smartAnalysis: z.object({
+      extractionNeeded: z.boolean(),
+      contentPredictions: z.array(z.object({
+        contentType: z.string(),
+        description: z.string(),
+        confidence: z.number(),
+        reasoning: z.string(),
+        suggestedTitle: z.string().optional(),
+        targetPlatform: z.string().optional(),
+        priority: z.enum(["high", "medium", "low"]),
+      })),
+      conversationInsights: z.object({
+        mainTopics: z.array(z.string()),
+        entities: z.array(z.string()),
+        sentiment: z.string(),
+        urgency: z.string(),
+      }),
+      detectedLanguage: z.string().optional(),
+      explicitLanguageRequest: z.string().optional(),
+      analysisNotes: z.string(),
+    }).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    // Skip if previous step failed
+    if (!inputData.success || !inputData.transcription) {
+      return {
+        ...inputData,
+        smartAnalysis: undefined,
+      };
+    }
+
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { analyzeTranscription } = await import("../agents/smart-agent");
+      const { getFullVoiceContext } = await import("@/lib/mastra/voice-context");
+      const { getFullUserContext } = await import("../tools/user-profile-tool");
+
+      // Get user context and voice history
+      const userId = inputData.userId;
+      if (!userId) {
+        console.warn("[smartAnalysisStep] No userId, skipping smart analysis");
+        return { ...inputData, smartAnalysis: undefined };
+      }
+
+      const [userContext, voiceContext] = await Promise.all([
+        getFullUserContext(userId),
+        getFullVoiceContext(userId),
+      ]);
+
+      // Run smart analysis
+      const analysis = await analyzeTranscription(
+        inputData.transcription,
+        userContext,
+        voiceContext.combinedContext
+      );
+
+      console.log("[smartAnalysisStep] Analysis complete", {
+        userId,
+        predictionsCount: analysis.contentPredictions.length,
+        mainTopics: analysis.conversationInsights.mainTopics,
+      });
+
+      return {
+        ...inputData,
+        userId,
+        smartAnalysis: analysis,
+      };
+    } catch (err) {
+      console.error("[smartAnalysisStep] Error in smart analysis", {
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
+      // Continue without smart analysis on error
+      return {
+        ...inputData,
+        smartAnalysis: undefined,
+      };
+    }
+  },
+}); // End of commented-out smartAnalysisStep - no longer used, content predictions come from voice agent
+
+/**
+ * Step 6: Generate predicted content
+ */
+const generateContentStep = createStep({
+  id: "generate-content",
+  description: "Generate content based on smart analysis predictions",
+  inputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string(),
+    })).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const userId = inputData.userId;
+    const extractedItems = inputData.extractedItems;
+
+    // Skip if no userId or no extracted items
+    if (!userId || !extractedItems) {
+      return { ...inputData, generatedContent: [] };
+    }
+
+    // Get content predictions from voice agent extraction
+    const predictions = extractedItems.contentPredictions || [];
+    
+    // Filter to high-confidence predictions (>= 0.5)
+    const highConfidencePredictions = predictions.filter(
+      (p: { confidence: number }) => p.confidence >= 0.5
+    );
+
+    if (highConfidencePredictions.length === 0) {
+      console.log("[generateContentStep] No high-confidence predictions, skipping");
+      return { ...inputData, generatedContent: [] };
+    }
+
+    try {
+      // Dynamically import
+      const { generateContent } = await import("../agents/content-agent");
+      const { saveGeneratedContent } = await import("../tools/content-generation-tool");
+      const { getFullVoiceContext } = await import("@/lib/mastra/voice-context");
+      const { getFullUserContext } = await import("../tools/user-profile-tool");
+
+      const [userContext, voiceContext] = await Promise.all([
+        getFullUserContext(userId),
+        getFullVoiceContext(userId),
+      ]);
+
+      // Limit to top 3 predictions
+      const predictionsToGenerate = highConfidencePredictions.slice(0, 3);
+      const generatedContent: Array<{
+        documentId?: string;
+        title: string;
+        contentType: string;
+        previewText: string;
+        status: string;
+      }> = [];
+
+      for (const prediction of predictionsToGenerate) {
+        try {
+          // Generate content
+          const content = await generateContent(
+            userContext,
+            voiceContext.combinedContext,
+            {
+              contentType: prediction.contentType,
+              description: prediction.description,
+              targetPlatform: prediction.targetPlatform,
+            }
+          );
+
+          // Save to database
+          const saveResult = await saveGeneratedContent(
+            userId,
+            {
+              title: content.title || prediction.suggestedTitle || `${prediction.contentType} Draft`,
+              contentType: prediction.contentType,
+              content: content.content,
+              previewText: content.previewText,
+              tags: content.tags,
+              language: content.language,
+            },
+            {
+              sourceVoiceNoteIds: inputData.sourceRecordingId ? [inputData.sourceRecordingId] : [],
+              professionContext: userContext.profession?.name,
+              confidenceScore: prediction.confidence,
+              generationType: prediction.confidence >= 0.8 ? "explicit" : "proactive",
+              modelUsed: "gpt-4o",
+            }
+          );
+
+          generatedContent.push({
+            documentId: saveResult.documentId,
+            title: content.title,
+            contentType: prediction.contentType,
+            previewText: content.previewText,
+            status: saveResult.success ? "ready" : "failed",
+          });
+
+          console.log("[generateContentStep] Content generated and saved", {
+            documentId: saveResult.documentId,
+            contentType: prediction.contentType,
+            title: content.title,
+          });
+        } catch (contentErr) {
+          console.error("[generateContentStep] Failed to generate content", {
+            contentType: prediction.contentType,
+            error: contentErr instanceof Error ? contentErr.message : "Unknown error",
+          });
+        }
+      }
+
+      return { ...inputData, generatedContent };
+    } catch (err) {
+      console.error("[generateContentStep] Error generating content", {
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
+      return { ...inputData, generatedContent: [] };
+    }
+  },
+});
+
+/**
+ * Step 7: Send notifications for generated content
+ */
+const notifyContentStep = createStep({
+  id: "notify-content",
+  description: "Send notifications for generated content",
+  inputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string().optional(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    generatedContent: z.array(z.any()).optional(),
+  }),
+  outputSchema: VoiceProcessingOutputSchema.extend({
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string(),
+    })).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const generatedContent = inputData.generatedContent || [];
+    const userId = inputData.userId;
+
+    if (generatedContent.length === 0 || !userId) {
+      return inputData;
+    }
+
+    try {
+      // Create notifications for each generated document
+      const { createClient } = await import("@supabase/supabase-js");
+      
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        for (const content of generatedContent) {
+          if (content.documentId && content.status === "ready") {
+            await supabase.from("notifications").insert({
+              user_id: userId,
+              title: "New Content Ready",
+              message: `I drafted a ${content.contentType}: "${content.title}"`,
+              type: "ai_generated",
+              related_document_id: content.documentId,
+              deep_link: `/dashboard/pro?doc=${content.documentId}`,
+            });
+          }
+        }
+
+        console.log("[notifyContentStep] Notifications created", {
+          count: generatedContent.filter(c => c.status === "ready").length,
+        });
+      }
+    } catch (err) {
+      console.error("[notifyContentStep] Failed to create notifications", {
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+
+    return inputData;
+  },
+});
+
+/**
+ * Voice Processing Workflow (Enhanced)
  * 
  * Pipeline:
  * 1. Transcribe audio using OpenAI Whisper
  * 2. Clean and correct transcription using AI
  * 3. Extract tasks, reminders, and notes using voice agent
  * 4. Save extracted items to database
+ * 5. Smart analysis (predict content needs from casual conversation)
+ * 6. Generate predicted content
+ * 7. Send notifications for generated content
  */
 export const voiceProcessingWorkflow = createWorkflow({
   id: "voice-processing-workflow",
-  description: "Transcribes audio and extracts actionable items",
+  description: "Transcribes audio, extracts actionable items, and generates predicted content",
   inputSchema: VoiceProcessingInputSchema,
-  outputSchema: VoiceProcessingOutputSchema,
+  outputSchema: VoiceProcessingOutputSchema.extend({
+    generatedContent: z.array(z.object({
+      documentId: z.string().optional(),
+      title: z.string(),
+      contentType: z.string(),
+      previewText: z.string(),
+      status: z.string(),
+    })).optional(),
+  }),
 })
   .then(transcribeStep)
   .then(cleanTranscriptionStep)
   .then(extractItemsStep)
   .then(saveItemsStep)
+  .then(generateContentStep)
+  .then(notifyContentStep)
   .commit();
 
 /**
@@ -920,6 +1314,7 @@ export async function processVoiceRecording(params: {
   audioBase64?: string;
   mimeType?: "audio/webm" | "audio/mpeg" | "audio/mp3" | "audio/mp4" | "audio/wav" | "audio/ogg" | "audio/flac";
   sourceRecordingId?: string;
+  skipSaveItems?: boolean;
 }) {
   const run = await voiceProcessingWorkflow.createRun();
   const result = await run.start({
@@ -929,6 +1324,7 @@ export async function processVoiceRecording(params: {
       audioBase64: params.audioBase64,
       mimeType: params.mimeType || "audio/webm",
       sourceRecordingId: params.sourceRecordingId,
+      skipSaveItems: params.skipSaveItems,
     },
   });
 

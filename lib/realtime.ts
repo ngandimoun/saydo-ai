@@ -34,6 +34,24 @@ export class RealtimeManager {
   private retryAttempts: Map<string, number> = new Map()
   private readonly MAX_RETRIES = 3
   private readonly INITIAL_RETRY_DELAY = 1000 // 1 second
+  private readonly INITIALIZATION_PERIOD = 3000 // 3 seconds
+  private initializationTime: number = Date.now()
+  private connectionState: 'initializing' | 'connected' | 'disconnected' = 'initializing'
+
+  /**
+   * Check if Supabase client is ready (past initialization period)
+   */
+  isReady(): boolean {
+    const timeSinceInit = Date.now() - this.initializationTime
+    return timeSinceInit > this.INITIALIZATION_PERIOD
+  }
+
+  /**
+   * Check if we're still in initialization period
+   */
+  private isInitializing(): boolean {
+    return !this.isReady()
+  }
 
   /**
    * Subscribe to real-time updates for a table
@@ -80,6 +98,7 @@ export class RealtimeManager {
       )
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
+          this.connectionState = 'connected'
           logger.info('Realtime subscription active', { channelName, table })
           // Reset retry counter on successful subscription
           this.retryAttempts.delete(channelName)
@@ -94,18 +113,43 @@ export class RealtimeManager {
             errorCode: (err as any)?.code,
             errorDetails: err ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : undefined,
           }
-          logger.error('Realtime subscription error', errorDetails)
+          
+          // During initialization, log as debug/warn instead of error
+          if (this.isInitializing()) {
+            logger.debug('Realtime subscription error during initialization', errorDetails)
+          } else {
+            // Check if it's a connection close error (transient)
+            const isConnectionError = err?.message?.includes('close') || 
+                                     err?.message?.includes('disconnect') ||
+                                     err?.message?.includes('connection')
+            
+            if (isConnectionError) {
+              logger.warn('Realtime subscription connection error', errorDetails)
+            } else {
+              logger.error('Realtime subscription error', errorDetails)
+            }
+          }
           
           // Attempt retry with exponential backoff
           this.attemptRetry(channelName, options)
         } else {
-          logger.warn('Realtime subscription status change', { 
-            channelName, 
-            table, 
-            status, 
-            error: err,
-            errorMessage: err?.message 
-          })
+          // During initialization, reduce log level
+          if (this.isInitializing() && status !== 'SUBSCRIBED') {
+            logger.debug('Realtime subscription status change during initialization', { 
+              channelName, 
+              table, 
+              status, 
+              error: err?.message 
+            })
+          } else {
+            logger.warn('Realtime subscription status change', { 
+              channelName, 
+              table, 
+              status, 
+              error: err,
+              errorMessage: err?.message 
+            })
+          }
         }
       })
 

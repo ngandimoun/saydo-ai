@@ -13,6 +13,10 @@ export class LocationUpdater {
   private supabase = createClient()
   private updateInterval: NodeJS.Timeout | null = null
   private isUpdating = false
+  private readonly INITIALIZATION_DELAY = 2000 // 2 seconds delay before first update
+  private readonly INITIALIZATION_PERIOD = 3000 // 3 seconds
+  private initializationTime: number = Date.now()
+  private hasInitialized = false
 
   /**
    * Validate and refresh session if needed
@@ -106,10 +110,48 @@ export class LocationUpdater {
   }
 
   /**
+   * Check if we're still in initialization period
+   */
+  private isInitializing(): boolean {
+    return Date.now() - this.initializationTime < this.INITIALIZATION_PERIOD
+  }
+
+  /**
+   * Check if network is available
+   */
+  private isNetworkAvailable(): boolean {
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+      return navigator.onLine
+    }
+    return true // Assume online if we can't check
+  }
+
+  /**
    * Update location from IP (no permission required)
    */
   async updateLocationFromIP(): Promise<void> {
     if (this.isUpdating) return
+    
+    // Wait for initialization period on first call
+    if (!this.hasInitialized) {
+      const timeSinceInit = Date.now() - this.initializationTime
+      if (timeSinceInit < this.INITIALIZATION_DELAY) {
+        const delay = this.INITIALIZATION_DELAY - timeSinceInit
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+      this.hasInitialized = true
+    }
+
+    // Check network availability
+    if (!this.isNetworkAvailable()) {
+      if (this.isInitializing()) {
+        logger.debug('Network unavailable during initialization, skipping location update')
+      } else {
+        logger.warn('Network unavailable, cannot update location')
+      }
+      return
+    }
+
     this.isUpdating = true
 
     try {
@@ -320,15 +362,38 @@ export class LocationUpdater {
         errorInfo.status = (error as any).status
         errorInfo.details = (error as any).details
         
+        // During initialization, suppress most errors
+        if (this.isInitializing()) {
+          // Check if it's a network error (expected during init)
+          const isNetworkError = error.message.includes('Failed to fetch') || 
+                                error.message.includes('Network error')
+          if (isNetworkError) {
+            logger.debug('Network error during initialization, skipping location update', errorInfo)
+          } else if ((error as any).status === 401) {
+            logger.debug('Authentication error during initialization (expected)', errorInfo)
+          } else {
+            logger.debug('Error during initialization, skipping location update', errorInfo)
+          }
+          return // Don't throw, just return gracefully
+        }
+        
         // If it's a 401 and we've exhausted retries, it might be user not authenticated
         // Log as warn instead of error to reduce noise
         if ((error as any).status === 401) {
           logger.warn('Failed to update location from IP - authentication issue', errorInfo)
           return // Don't throw, just return gracefully
         }
+        
+        // Check if it's a network error
+        const isNetworkError = error.message.includes('Failed to fetch') || 
+                              error.message.includes('Network error')
+        if (isNetworkError) {
+          logger.warn('Network error while updating location from IP', errorInfo)
+          return // Don't throw, just return gracefully
+        }
       }
       
-      // For other errors (network, server errors, etc.), log as warning to reduce noise
+      // For other errors (server errors, etc.), log as warning to reduce noise
       logger.warn('Failed to update location from IP', errorInfo)
     } finally {
       this.isUpdating = false

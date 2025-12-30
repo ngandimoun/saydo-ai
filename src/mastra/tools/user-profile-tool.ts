@@ -191,3 +191,175 @@ export async function getUserTimezone(userId: string): Promise<string> {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+/**
+ * Extended user context for content generation
+ * Includes profession-specific guidance and platform preferences
+ */
+export interface FullUserContext extends UserContext {
+  // Computed profession guidance
+  professionGuidance: {
+    defaultContentTypes: string[];
+    commonTerminology: string[];
+    formalityLevel: "formal" | "casual" | "professional";
+    typicalOutputs: string[];
+  };
+  // Social platform details
+  socialPlatformDetails: Array<{
+    id: string;
+    name: string;
+    characterLimit?: number;
+  }>;
+  // Recent content generation history
+  recentContentTypes: string[];
+  // Locale info
+  locale: {
+    timezone: string;
+    dateFormat: string;
+    language: string;
+  };
+}
+
+/**
+ * Profession guidance mapping
+ */
+const PROFESSION_GUIDANCE: Record<string, {
+  defaultContentTypes: string[];
+  commonTerminology: string[];
+  formalityLevel: "formal" | "casual" | "professional";
+  typicalOutputs: string[];
+}> = {
+  nurse: {
+    defaultContentTypes: ["shift_report", "patient_notes", "handoff", "medication_log"],
+    commonTerminology: ["patient", "vitals", "medication", "shift", "discharge", "admission"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Shift Report", "Patient Summary", "Handoff Notes", "Care Plan"],
+  },
+  doctor: {
+    defaultContentTypes: ["consultation_notes", "patient_report", "prescription", "referral"],
+    commonTerminology: ["diagnosis", "treatment", "prognosis", "prescription", "referral"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Medical Report", "Consultation Notes", "Referral Letter", "Treatment Plan"],
+  },
+  founder: {
+    defaultContentTypes: ["social_post", "investor_update", "team_memo", "product_insight"],
+    commonTerminology: ["startup", "growth", "metrics", "runway", "product", "team"],
+    formalityLevel: "casual",
+    typicalOutputs: ["X Post", "LinkedIn Post", "Investor Update", "Team Memo"],
+  },
+  entrepreneur: {
+    defaultContentTypes: ["social_post", "pitch", "business_plan", "partnership_note"],
+    commonTerminology: ["business", "growth", "revenue", "partnership", "market"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Social Post", "Pitch Summary", "Business Update", "Partnership Proposal"],
+  },
+  pastor: {
+    defaultContentTypes: ["sermon_notes", "church_announcement", "prayer_points", "bible_study"],
+    commonTerminology: ["sermon", "scripture", "congregation", "ministry", "prayer"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Sermon Outline", "Church Announcement", "Prayer Points", "Devotional"],
+  },
+  manager: {
+    defaultContentTypes: ["team_update", "performance_review", "meeting_notes", "project_status"],
+    commonTerminology: ["team", "project", "deadline", "performance", "goal"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Team Update", "Meeting Notes", "Project Status", "Performance Review"],
+  },
+  consultant: {
+    defaultContentTypes: ["client_report", "analysis", "recommendations", "proposal"],
+    commonTerminology: ["client", "analysis", "recommendation", "strategy", "implementation"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Client Report", "Analysis Summary", "Recommendations", "Proposal"],
+  },
+  mechanic: {
+    defaultContentTypes: ["repair_log", "service_record", "parts_list", "estimate"],
+    commonTerminology: ["repair", "diagnosis", "parts", "service", "warranty"],
+    formalityLevel: "casual",
+    typicalOutputs: ["Repair Log", "Service Record", "Parts List", "Customer Estimate"],
+  },
+  default: {
+    defaultContentTypes: ["summary", "email_draft", "notes", "report"],
+    commonTerminology: [],
+    formalityLevel: "professional",
+    typicalOutputs: ["Summary", "Email Draft", "Notes", "Report"],
+  },
+};
+
+/**
+ * Social platform details
+ */
+const SOCIAL_PLATFORMS: Record<string, { name: string; characterLimit?: number }> = {
+  twitter: { name: "X (Twitter)", characterLimit: 280 },
+  linkedin: { name: "LinkedIn", characterLimit: 3000 },
+  reddit: { name: "Reddit", characterLimit: 40000 },
+  hackernews: { name: "Hacker News" },
+  substack: { name: "Substack" },
+  medium: { name: "Medium" },
+  youtube: { name: "YouTube" },
+  podcasts: { name: "Podcasts" },
+};
+
+/**
+ * Get full user context with profession guidance and platform details
+ */
+export async function getFullUserContext(userId: string): Promise<FullUserContext> {
+  const supabase = getSupabaseClient();
+  
+  // Get base user context
+  const userContext = await getUserContext(userId);
+  const timezone = await getUserTimezone(userId);
+  
+  // Get recent AI documents to understand content preferences
+  const { data: recentDocs } = await supabase
+    .from("ai_documents")
+    .select("document_type")
+    .eq("user_id", userId)
+    .order("generated_at", { ascending: false })
+    .limit(10);
+  
+  const recentContentTypes = [...new Set((recentDocs || []).map(d => d.document_type))];
+  
+  // Get profession guidance
+  const professionKey = userContext.profession?.id?.toLowerCase() || "default";
+  const professionGuidance = PROFESSION_GUIDANCE[professionKey] || PROFESSION_GUIDANCE.default;
+  
+  // Map social platforms to details
+  const socialPlatformDetails = userContext.socialIntelligence.map(id => ({
+    id,
+    name: SOCIAL_PLATFORMS[id]?.name || id,
+    characterLimit: SOCIAL_PLATFORMS[id]?.characterLimit,
+  }));
+  
+  // Determine date format based on language
+  const dateFormat = userContext.language === "en" ? "MM/DD/YYYY" :
+                     userContext.language === "de" || userContext.language === "fr" ? "DD/MM/YYYY" :
+                     "YYYY-MM-DD";
+  
+  return {
+    ...userContext,
+    professionGuidance,
+    socialPlatformDetails,
+    recentContentTypes,
+    locale: {
+      timezone,
+      dateFormat,
+      language: userContext.language,
+    },
+  };
+}
+
+/**
+ * Get profession-specific content type suggestions
+ */
+export function getProfessionContentTypes(profession: string): string[] {
+  const key = profession.toLowerCase().replace(/\s+/g, "_");
+  return PROFESSION_GUIDANCE[key]?.defaultContentTypes || PROFESSION_GUIDANCE.default.defaultContentTypes;
+}
+
+/**
+ * Get profession formality level
+ */
+export function getProfessionFormality(profession: string): "formal" | "casual" | "professional" {
+  const key = profession.toLowerCase().replace(/\s+/g, "_");
+  return PROFESSION_GUIDANCE[key]?.formalityLevel || PROFESSION_GUIDANCE.default.formalityLevel;
+}
+

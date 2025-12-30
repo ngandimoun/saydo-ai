@@ -114,5 +114,105 @@ async function getUserTimezone(userId) {
   }
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
+const PROFESSION_GUIDANCE = {
+  nurse: {
+    defaultContentTypes: ["shift_report", "patient_notes", "handoff", "medication_log"],
+    commonTerminology: ["patient", "vitals", "medication", "shift", "discharge", "admission"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Shift Report", "Patient Summary", "Handoff Notes", "Care Plan"]
+  },
+  doctor: {
+    defaultContentTypes: ["consultation_notes", "patient_report", "prescription", "referral"],
+    commonTerminology: ["diagnosis", "treatment", "prognosis", "prescription", "referral"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Medical Report", "Consultation Notes", "Referral Letter", "Treatment Plan"]
+  },
+  founder: {
+    defaultContentTypes: ["social_post", "investor_update", "team_memo", "product_insight"],
+    commonTerminology: ["startup", "growth", "metrics", "runway", "product", "team"],
+    formalityLevel: "casual",
+    typicalOutputs: ["X Post", "LinkedIn Post", "Investor Update", "Team Memo"]
+  },
+  entrepreneur: {
+    defaultContentTypes: ["social_post", "pitch", "business_plan", "partnership_note"],
+    commonTerminology: ["business", "growth", "revenue", "partnership", "market"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Social Post", "Pitch Summary", "Business Update", "Partnership Proposal"]
+  },
+  pastor: {
+    defaultContentTypes: ["sermon_notes", "church_announcement", "prayer_points", "bible_study"],
+    commonTerminology: ["sermon", "scripture", "congregation", "ministry", "prayer"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Sermon Outline", "Church Announcement", "Prayer Points", "Devotional"]
+  },
+  manager: {
+    defaultContentTypes: ["team_update", "performance_review", "meeting_notes", "project_status"],
+    commonTerminology: ["team", "project", "deadline", "performance", "goal"],
+    formalityLevel: "professional",
+    typicalOutputs: ["Team Update", "Meeting Notes", "Project Status", "Performance Review"]
+  },
+  consultant: {
+    defaultContentTypes: ["client_report", "analysis", "recommendations", "proposal"],
+    commonTerminology: ["client", "analysis", "recommendation", "strategy", "implementation"],
+    formalityLevel: "formal",
+    typicalOutputs: ["Client Report", "Analysis Summary", "Recommendations", "Proposal"]
+  },
+  mechanic: {
+    defaultContentTypes: ["repair_log", "service_record", "parts_list", "estimate"],
+    commonTerminology: ["repair", "diagnosis", "parts", "service", "warranty"],
+    formalityLevel: "casual",
+    typicalOutputs: ["Repair Log", "Service Record", "Parts List", "Customer Estimate"]
+  },
+  default: {
+    defaultContentTypes: ["summary", "email_draft", "notes", "report"],
+    commonTerminology: [],
+    formalityLevel: "professional",
+    typicalOutputs: ["Summary", "Email Draft", "Notes", "Report"]
+  }
+};
+const SOCIAL_PLATFORMS = {
+  twitter: { name: "X (Twitter)", characterLimit: 280 },
+  linkedin: { name: "LinkedIn", characterLimit: 3e3 },
+  reddit: { name: "Reddit", characterLimit: 4e4 },
+  hackernews: { name: "Hacker News" },
+  substack: { name: "Substack" },
+  medium: { name: "Medium" },
+  youtube: { name: "YouTube" },
+  podcasts: { name: "Podcasts" }
+};
+async function getFullUserContext(userId) {
+  const supabase = getSupabaseClient();
+  const userContext = await getUserContext(userId);
+  const timezone = await getUserTimezone(userId);
+  const { data: recentDocs } = await supabase.from("ai_documents").select("document_type").eq("user_id", userId).order("generated_at", { ascending: false }).limit(10);
+  const recentContentTypes = [...new Set((recentDocs || []).map((d) => d.document_type))];
+  const professionKey = userContext.profession?.id?.toLowerCase() || "default";
+  const professionGuidance = PROFESSION_GUIDANCE[professionKey] || PROFESSION_GUIDANCE.default;
+  const socialPlatformDetails = userContext.socialIntelligence.map((id) => ({
+    id,
+    name: SOCIAL_PLATFORMS[id]?.name || id,
+    characterLimit: SOCIAL_PLATFORMS[id]?.characterLimit
+  }));
+  const dateFormat = userContext.language === "en" ? "MM/DD/YYYY" : userContext.language === "de" || userContext.language === "fr" ? "DD/MM/YYYY" : "YYYY-MM-DD";
+  return {
+    ...userContext,
+    professionGuidance,
+    socialPlatformDetails,
+    recentContentTypes,
+    locale: {
+      timezone,
+      dateFormat,
+      language: userContext.language
+    }
+  };
+}
+function getProfessionContentTypes(profession) {
+  const key = profession.toLowerCase().replace(/\s+/g, "_");
+  return PROFESSION_GUIDANCE[key]?.defaultContentTypes || PROFESSION_GUIDANCE.default.defaultContentTypes;
+}
+function getProfessionFormality(profession) {
+  const key = profession.toLowerCase().replace(/\s+/g, "_");
+  return PROFESSION_GUIDANCE[key]?.formalityLevel || PROFESSION_GUIDANCE.default.formalityLevel;
+}
 
-export { getUserContext, getUserProfileTool, getUserTimezone };
+export { getFullUserContext, getProfessionContentTypes, getProfessionFormality, getUserContext, getUserProfileTool, getUserTimezone };

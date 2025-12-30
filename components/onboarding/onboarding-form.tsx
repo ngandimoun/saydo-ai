@@ -219,6 +219,28 @@ export function OnboardingForm() {
         }
       }
 
+      // Initialize Mastra memory with onboarding data
+      // This ensures all onboarding details are available to agents via memory
+      try {
+        const memoryResponse = await fetch('/api/onboarding/initialize-memory', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!memoryResponse.ok) {
+          console.warn('Failed to initialize memory, but continuing:', await memoryResponse.text())
+          // Don't throw - memory can be initialized later if needed
+        } else {
+          const memoryData = await memoryResponse.json()
+          console.log('Memory initialized successfully:', memoryData)
+        }
+      } catch (memoryError) {
+        console.warn('Error initializing memory, but continuing:', memoryError)
+        // Don't throw - memory can be initialized later if needed
+      }
+
       // Navigate to dashboard on success
       router.push('/dashboard')
     } catch (error) {

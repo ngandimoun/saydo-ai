@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { motion } from "framer-motion"
 import { Mic, Clock, CheckCircle2, Loader2, Link2, ChevronLeft, Play, Pause, FileAudio, Check } from "lucide-react"
 import type { VoiceNote } from "@/lib/dashboard/types"
@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase"
 import { logger } from "@/lib/logger"
 import { useVoiceTimeline } from "@/hooks/queries"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
+import { getValidAudioUrl, getAudioErrorMessage } from "@/lib/audio-url-utils"
 
 /**
  * Voice Timeline Page
@@ -28,10 +29,36 @@ export default function VoicePage() {
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({})
   const [savingStatus, setSavingStatus] = useState<Record<string, { type: 'transcription' | 'aiSummary', status: 'saving' | 'saved' | 'error', errorMessage?: string }>>({})
   const originalValuesRef = useRef<Record<string, { transcription?: string, aiSummary?: string }>>({})
+  const [audioLoading, setAudioLoading] = useState<Record<string, boolean>>({})
+  const [audioErrors, setAudioErrors] = useState<Record<string, string>>({})
 
   // Use query hook for cached voice timeline
-  const { data: voiceNotes = [], isLoading, error: queryError } = useVoiceTimeline({ limit: 50 })
+  const { data: voiceNotesData = [], isLoading, error: queryError } = useVoiceTimeline({ limit: 50 })
   const error = queryError ? "Failed to load voice recordings" : null
+
+  // Local state for editable notes (allows editing transcriptions)
+  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([])
+  
+  // Use a ref to track previous data and prevent infinite loops
+  const previousDataRef = useRef<string>('')
+
+  // Create a stable string representation of the data for comparison
+  const dataKey = useMemo(() => {
+    return JSON.stringify(voiceNotesData.map(note => ({
+      id: note.id,
+      transcription: note.transcription,
+      aiSummary: note.aiSummary,
+      status: note.status,
+    })))
+  }, [voiceNotesData])
+
+  // Sync voiceNotes from query data only when data actually changes
+  useEffect(() => {
+    if (dataKey !== previousDataRef.current) {
+      previousDataRef.current = dataKey
+      setVoiceNotes(voiceNotesData)
+    }
+  }, [dataKey, voiceNotesData])
 
   // Store original values for comparison when data loads
   useEffect(() => {
@@ -468,71 +495,220 @@ export default function VoicePage() {
                       )}
 
                       {/* Play button */}
-                      {note.audioUrl && (
-                        <div className="mt-3">
-                          <button
-                            onClick={() => {
-                              const audioId = note.id
-                              const audio = audioRefs.current[audioId]
-                              
-                              if (!audio) {
-                                // Create audio element if it doesn't exist
-                                const newAudio = new Audio(note.audioUrl)
-                                newAudio.addEventListener('ended', () => {
-                                  setPlayingId(null)
-                                })
-                                newAudio.addEventListener('error', (e) => {
-                                  logger.error('Audio playback error', { error: e, audioUrl: note.audioUrl })
-                                  setPlayingId(null)
-                                })
-                                audioRefs.current[audioId] = newAudio
+                      {note.audioUrl && (() => {
+                        const audioId = note.id
+                        const isLoading = audioLoading[audioId]
+                        const errorMessage = audioErrors[audioId]
+                        
+                        return (
+                          <div className="mt-3 space-y-2">
+                            <button
+                              onClick={async () => {
+                                const audio = audioRefs.current[audioId]
                                 
-                                // Play the audio
-                                newAudio.play().catch((err) => {
-                                  logger.error('Failed to play audio', { error: err })
-                                  setPlayingId(null)
+                                // Clear any previous error
+                                setAudioErrors(prev => {
+                                  const newErrors = { ...prev }
+                                  delete newErrors[audioId]
+                                  return newErrors
                                 })
-                                setPlayingId(audioId)
-                              } else {
-                                // Toggle play/pause
-                                if (playingId === audioId) {
-                                  audio.pause()
-                                  setPlayingId(null)
-                                } else {
-                                  // Stop any currently playing audio
-                                  Object.values(audioRefs.current).forEach(a => {
-                                    if (a !== audio) a.pause()
-                                  })
-                                  audio.play().catch((err) => {
-                                    logger.error('Failed to play audio', { error: err })
+                                
+                                if (!audio) {
+                                  // Validate audio URL exists
+                                  if (!note.audioUrl || note.audioUrl.trim() === '') {
+                                    const errorMsg = 'Invalid audio URL - please try again'
+                                    setAudioErrors(prev => ({ ...prev, [audioId]: errorMsg }))
+                                    logger.error('Audio URL is empty', { audioId, noteId: note.id })
+                                    return
+                                  }
+
+                                  // Set loading state
+                                  setAudioLoading(prev => ({ ...prev, [audioId]: true }))
+                                  
+                                  try {
+                                    // Get valid audio URL (refresh if expired)
+                                    const validUrl = await getValidAudioUrl(note.audioUrl)
+                                    
+                                    // Validate URL is not empty after refresh
+                                    if (!validUrl || validUrl.trim() === '') {
+                                      throw new Error('Audio URL is empty after refresh')
+                                    }
+                                    
+                                    // Create audio element
+                                    const newAudio = new Audio()
+                                    
+                                    // Set preload to none to prevent auto-loading
+                                    newAudio.preload = 'none'
+                                    
+                                    // Set src explicitly to ensure it's set
+                                    newAudio.src = validUrl
+                                    
+                                    // Verify src is actually set
+                                    if (!newAudio.src || newAudio.src.trim() === '' || newAudio.src === window.location.href) {
+                                      throw new Error(`Audio src is empty or invalid after setting. Expected: ${validUrl}, Got: ${newAudio.src}`)
+                                    }
+                                    
+                                    newAudio.addEventListener('ended', () => {
+                                      setPlayingId(null)
+                                    })
+                                    
+                                    newAudio.addEventListener('error', (e) => {
+                                      const error = newAudio.error
+                                      const networkState = newAudio.networkState
+                                      const currentSrc = newAudio.src
+                                      
+                                      // Check if src is actually empty
+                                      const isSrcEmpty = !currentSrc || currentSrc.trim() === '' || currentSrc === window.location.href
+                                      
+                                      // Get more context about the error
+                                      let errorContext = {
+                                        error: error || e,
+                                        audioUrl: validUrl,
+                                        currentSrc: currentSrc,
+                                        isSrcEmpty: isSrcEmpty,
+                                        errorCode: error?.code,
+                                        errorMessage: error?.message,
+                                        networkState: networkState,
+                                        readyState: newAudio.readyState,
+                                      }
+                                      
+                                      let errorMsg: string
+                                      if (isSrcEmpty) {
+                                        errorMsg = 'Audio source is empty - please try again'
+                                        logger.error('Audio src is empty in error handler', errorContext)
+                                      } else {
+                                        errorMsg = getAudioErrorMessage(error || e, validUrl)
+                                        logger.error('Audio playback error', errorContext)
+                                      }
+                                      
+                                      setAudioErrors(prev => ({ ...prev, [audioId]: errorMsg }))
+                                      setPlayingId(null)
+                                      setAudioLoading(prev => {
+                                        const newLoading = { ...prev }
+                                        delete newLoading[audioId]
+                                        return newLoading
+                                      })
+                                    })
+                                    
+                                    newAudio.addEventListener('loadeddata', () => {
+                                      setAudioLoading(prev => {
+                                        const newLoading = { ...prev }
+                                        delete newLoading[audioId]
+                                        return newLoading
+                                      })
+                                    })
+                                    
+                                    // Verify src one more time before storing
+                                    if (!newAudio.src || newAudio.src.trim() === '') {
+                                      throw new Error('Audio src is empty before storing reference')
+                                    }
+                                    
+                                    audioRefs.current[audioId] = newAudio
+                                    
+                                    // Play the audio
+                                    await newAudio.play()
+                                    setPlayingId(audioId)
+                                  } catch (err) {
+                                    let errorMsg: string
+                                    
+                                    // Check if it's a validation error
+                                    if (err instanceof Error && err.message.includes('Audio URL')) {
+                                      errorMsg = err.message
+                                    } else {
+                                      errorMsg = getAudioErrorMessage(err, note.audioUrl)
+                                    }
+                                    
+                                    logger.error('Failed to play audio', { error: err, audioUrl: note.audioUrl })
+                                    
+                                    setAudioErrors(prev => ({ ...prev, [audioId]: errorMsg }))
                                     setPlayingId(null)
-                                  })
-                                  setPlayingId(audioId)
+                                    setAudioLoading(prev => {
+                                      const newLoading = { ...prev }
+                                      delete newLoading[audioId]
+                                      return newLoading
+                                    })
+                                  }
+                                } else {
+                                  // Toggle play/pause
+                                  if (playingId === audioId) {
+                                    audio.pause()
+                                    setPlayingId(null)
+                                  } else {
+                                    // Verify src is set before playing
+                                    if (!audio.src || audio.src.trim() === '' || audio.src === window.location.href) {
+                                      const errorMsg = 'Audio source is empty - please try again'
+                                      logger.error('Audio src is empty when trying to play existing audio', { 
+                                        audioId, 
+                                        currentSrc: audio.src,
+                                        networkState: audio.networkState,
+                                        readyState: audio.readyState
+                                      })
+                                      setAudioErrors(prev => ({ ...prev, [audioId]: errorMsg }))
+                                      return
+                                    }
+                                    
+                                    // Stop any currently playing audio
+                                    Object.values(audioRefs.current).forEach(a => {
+                                      if (a !== audio) a.pause()
+                                    })
+                                    
+                                    try {
+                                      await audio.play()
+                                      setPlayingId(audioId)
+                                    } catch (err) {
+                                      const errorMsg = getAudioErrorMessage(err, audio.src)
+                                      
+                                      logger.error('Failed to play audio', { 
+                                        error: err, 
+                                        audioUrl: audio.src,
+                                        networkState: audio.networkState,
+                                        readyState: audio.readyState,
+                                        errorCode: audio.error?.code
+                                      })
+                                      
+                                      setAudioErrors(prev => ({ ...prev, [audioId]: errorMsg }))
+                                      setPlayingId(null)
+                                    }
+                                  }
                                 }
-                              }
-                            }}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-1.5 rounded-full",
-                              "bg-muted text-sm transition-colors touch-manipulation",
-                              playingId === note.id
-                                ? "text-foreground bg-primary/20"
-                                : "text-muted-foreground hover:text-foreground"
+                              }}
+                              disabled={isLoading}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-full",
+                                "bg-muted text-sm transition-colors touch-manipulation",
+                                isLoading && "opacity-50 cursor-not-allowed",
+                                playingId === note.id
+                                  ? "text-foreground bg-primary/20"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 size={12} className="animate-spin" />
+                                  Loading...
+                                </>
+                              ) : playingId === note.id ? (
+                                <>
+                                  <Pause size={12} />
+                                  Pause
+                                </>
+                              ) : (
+                                <>
+                                  <Play size={12} />
+                                  Play recording
+                                </>
+                              )}
+                            </button>
+                            
+                            {/* Error message */}
+                            {errorMessage && (
+                              <p className="text-xs text-red-500 mt-1">
+                                {errorMessage}
+                              </p>
                             )}
-                          >
-                            {playingId === note.id ? (
-                              <>
-                                <Pause size={12} />
-                                Pause
-                              </>
-                            ) : (
-                              <>
-                                <Play size={12} />
-                                Play recording
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </motion.div>

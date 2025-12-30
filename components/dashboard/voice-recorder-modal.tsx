@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
 import { useVoiceRecorder, type VoiceProcessingResult } from "@/hooks/use-voice-recorder"
 import { logger } from "@/lib/logger"
-import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 
 /**
  * Voice Recorder Modal - Airbnb-Inspired
@@ -162,19 +161,9 @@ export function VoiceRecorderModal({
     onClose()
   }, [isRecording, stopRecording, onClose])
 
-  // Save changes and close
+  // Execute extraction and save changes
   const handleDone = useCallback(async () => {
     if (!recordingId) {
-      onClose()
-      return
-    }
-
-    // Check if values have changed
-    const transcriptionChanged = editedTranscription.trim() !== (processingResult?.transcription || '').trim()
-    const aiSummaryChanged = editedAiSummary.trim() !== (processingResult?.extractedItems?.summary || '').trim()
-
-    if (!transcriptionChanged && !aiSummaryChanged) {
-      // No changes, just close
       onClose()
       return
     }
@@ -183,7 +172,8 @@ export function VoiceRecorderModal({
     setSaveError(null)
 
     try {
-      const response = await fetch('/api/voice/update', {
+      // Call execute endpoint to extract items from edited transcription and save them
+      const response = await fetch('/api/voice/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,25 +181,46 @@ export function VoiceRecorderModal({
         credentials: 'include',
         body: JSON.stringify({
           recordingId,
-          transcription: transcriptionChanged ? editedTranscription.trim() : undefined,
-          aiSummary: aiSummaryChanged ? editedAiSummary.trim() : undefined,
+          transcription: editedTranscription.trim(),
+          aiSummary: editedAiSummary.trim() || undefined,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save changes')
+        throw new Error(errorData.error || 'Failed to execute and save items')
       }
 
-      logger.info('Changes saved successfully', { recordingId })
+      const result = await response.json()
+      logger.info('Items executed and saved successfully', { 
+        recordingId,
+        tasksSaved: result.saved?.tasks || 0,
+        remindersSaved: result.saved?.reminders || 0,
+      })
+
+      // Dispatch events to trigger UI refresh
+      if (typeof window !== 'undefined') {
+        if (result.saved?.tasks > 0 || result.saved?.reminders > 0) {
+          window.dispatchEvent(new CustomEvent('voice-processing-complete', {
+            detail: {
+              tasksCount: result.saved?.tasks || 0,
+              remindersCount: result.saved?.reminders || 0,
+            }
+          }))
+          window.dispatchEvent(new CustomEvent('tasks-updated'))
+          localStorage.setItem('voice-processing-complete', Date.now().toString())
+          localStorage.setItem('tasks-updated', Date.now().toString())
+        }
+      }
+
       onClose()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save changes'
-      logger.error('Failed to save changes', { error, recordingId })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to execute and save items'
+      logger.error('Failed to execute and save items', { error, recordingId })
       setSaveError(errorMessage)
       setIsSaving(false)
     }
-  }, [recordingId, editedTranscription, editedAiSummary, processingResult, onClose])
+  }, [recordingId, editedTranscription, editedAiSummary, onClose])
 
   // Calculate progress percentage
   const progress = (duration / maxDuration) * 100
@@ -358,16 +369,19 @@ export function VoiceRecorderModal({
                   )}
 
                   {/* Summary */}
-                  {processingResult.extractedItems?.summary && (
+                  {processingResult?.success && (
                     <div className="p-4 bg-primary/10 backdrop-blur-sm rounded-2xl border border-primary/20">
                       <div className="flex items-center gap-2 mb-3">
                         <Sparkles size={14} className="text-primary" />
                         <span className="text-xs font-medium text-primary">AI Summary</span>
                       </div>
-                      <div className="max-h-[300px] overflow-y-auto pr-2 -mr-2">
-                        <MarkdownRenderer 
-                          content={editedAiSummary || "AI Summary will appear here..."}
-                          className="text-white/90"
+                      <div className="max-h-[300px] overflow-y-auto">
+                        <textarea
+                          value={editedAiSummary}
+                          onChange={(e) => setEditedAiSummary(e.target.value)}
+                          className="w-full text-white/90 text-sm leading-relaxed bg-transparent border-none outline-none resize-none focus:ring-0 p-0 min-h-[100px]"
+                          rows={Math.max(4, editedAiSummary.split('\n').length)}
+                          placeholder="AI Summary will appear here..."
                         />
                       </div>
                     </div>

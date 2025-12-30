@@ -32,7 +32,24 @@ function getSupabaseClient() {
 }
 
 /**
+ * Helper function to sleep/delay
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if error is a PostgREST schema cache issue (PGRST205)
+ */
+function isSchemaCacheError(error: { code?: string }): boolean {
+  return error.code === "PGRST205";
+}
+
+/**
  * Save or update a pattern in the database
+ * 
+ * Includes retry logic with exponential backoff to handle PostgREST schema cache issues.
+ * PostgREST caches the database schema and may not immediately see newly created tables.
  */
 export async function savePattern(
   userId: string,
@@ -40,38 +57,82 @@ export async function savePattern(
   patternData: PatternData,
   metadata?: Record<string, unknown>
 ): Promise<{ success: boolean; patternId?: string; error?: string }> {
-  try {
-    const supabase = getSupabaseClient();
+  const maxRetries = 3;
+  const retryDelays = [2000, 4000, 8000]; // 2s, 4s, 8s
 
-    // Insert new pattern observation
-    // Note: We create a new pattern entry for each observation
-    // The analysis endpoint will aggregate these into consolidated patterns
-    const { data, error } = await supabase
-      .from("user_patterns")
-      .insert({
-        user_id: userId,
-        pattern_type: patternType,
-        pattern_data: patternData as unknown as Record<string, unknown>,
-        frequency: 1,
-        confidence_score: 10, // Initial confidence
-        metadata: metadata || {},
-      })
-      .select("id")
-      .single();
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const supabase = getSupabaseClient();
 
-    if (error) {
-      console.error("[savePattern] Insert error", error);
-      return { success: false, error: error.message };
+      // Insert new pattern observation
+      // Note: We create a new pattern entry for each observation
+      // The analysis endpoint will aggregate these into consolidated patterns
+      const { data, error } = await supabase
+        .from("user_patterns")
+        .insert({
+          user_id: userId,
+          pattern_type: patternType,
+          pattern_data: patternData as unknown as Record<string, unknown>,
+          frequency: 1,
+          confidence_score: 10, // Initial confidence
+          metadata: metadata || {},
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        // Check if this is a schema cache error and we have retries left
+        if (isSchemaCacheError(error) && attempt < maxRetries) {
+          const delay = retryDelays[attempt];
+          console.warn(
+            `[savePattern] Schema cache miss (PGRST205), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`
+          );
+          await sleep(delay);
+          continue; // Retry
+        }
+
+        // Non-retryable error or out of retries
+        if (isSchemaCacheError(error)) {
+          console.warn(
+            "[savePattern] Schema cache still not refreshed after all retries. Pattern save skipped (non-critical)."
+          );
+        } else {
+          console.error("[savePattern] Insert error", error);
+        }
+        return { success: false, error: error.message };
+      }
+
+      // Success!
+      if (attempt > 0) {
+        console.log(`[savePattern] Successfully saved pattern after ${attempt} retry(ies)`);
+      }
+      return { success: true, patternId: data.id };
+    } catch (err) {
+      // Check if this is a schema cache error in the exception
+      const errorObj = err as { code?: string; message?: string };
+      if (isSchemaCacheError(errorObj) && attempt < maxRetries) {
+        const delay = retryDelays[attempt];
+        console.warn(
+          `[savePattern] Schema cache exception, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await sleep(delay);
+        continue; // Retry
+      }
+
+      // Non-retryable exception or out of retries
+      console.error("[savePattern] Exception", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to save pattern",
+      };
     }
-
-    return { success: true, patternId: data.id };
-  } catch (err) {
-    console.error("[savePattern] Exception", err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to save pattern",
-    };
   }
+
+  // Should never reach here, but TypeScript needs this
+  return {
+    success: false,
+    error: "Failed to save pattern after all retries",
+  };
 }
 
 /**

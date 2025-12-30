@@ -36,6 +36,8 @@ class EnvironmentAPI {
   private openWeatherMapKey: string | undefined
   private openAQKey: string | undefined
   private ipApiKey: string | undefined
+  private readonly INITIALIZATION_PERIOD = 3000 // 3 seconds
+  private initializationTime: number = Date.now()
 
   constructor() {
     this.openWeatherMapKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_API_KEY
@@ -44,9 +46,36 @@ class EnvironmentAPI {
   }
 
   /**
+   * Check if we're still in initialization period
+   */
+  private isInitializing(): boolean {
+    return Date.now() - this.initializationTime < this.INITIALIZATION_PERIOD
+  }
+
+  /**
+   * Check if network is available
+   */
+  private isNetworkAvailable(): boolean {
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+      return navigator.onLine
+    }
+    return true // Assume online if we can't check
+  }
+
+  /**
    * Get location from IP address (no permission required)
    */
   async getLocationFromIP(): Promise<LocationData | null> {
+    // Check network availability
+    if (!this.isNetworkAvailable()) {
+      if (this.isInitializing()) {
+        logger.debug('Network unavailable during initialization, skipping location fetch')
+      } else {
+        logger.warn('Network unavailable, cannot fetch location from IP')
+      }
+      return null
+    }
+
     try {
       // Try ipapi.co first (better free tier)
       if (this.ipApiKey) {
@@ -65,7 +94,7 @@ class EnvironmentAPI {
       }
 
       // Fallback to free ip-api.com (no key required)
-      const response = await fetch('http://ip-api.com/json/')
+      const response = await fetch('https://ip-api.com/json/')
       if (response.ok) {
         const data = await response.json()
         if (data.status === 'success') {
@@ -82,7 +111,18 @@ class EnvironmentAPI {
 
       return null
     } catch (error) {
-      logger.error('Failed to get location from IP', { error })
+      // During initialization, log as warn/debug instead of error
+      if (this.isInitializing()) {
+        logger.debug('Failed to get location from IP during initialization', { error })
+      } else {
+        // Check if it's a network error
+        const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch'
+        if (isNetworkError) {
+          logger.warn('Network error while fetching location from IP', { error })
+        } else {
+          logger.error('Failed to get location from IP', { error })
+        }
+      }
       return null
     }
   }
@@ -125,7 +165,17 @@ class EnvironmentAPI {
         },
       }
     } catch (error) {
-      logger.error('Failed to get UV index and weather', { error })
+      // During initialization, log as warn instead of error
+      if (this.isInitializing()) {
+        logger.debug('Failed to get UV index and weather during initialization', { error })
+      } else {
+        const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch'
+        if (isNetworkError) {
+          logger.warn('Network error while fetching UV index and weather', { error })
+        } else {
+          logger.error('Failed to get UV index and weather', { error })
+        }
+      }
       return null
     }
   }
@@ -172,7 +222,17 @@ class EnvironmentAPI {
         category: 'good' as const,
       }
     } catch (error) {
-      logger.error('Failed to get air quality', { error })
+      // During initialization, log as warn instead of error
+      if (this.isInitializing()) {
+        logger.debug('Failed to get air quality during initialization', { error })
+      } else {
+        const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch'
+        if (isNetworkError) {
+          logger.warn('Network error while fetching air quality', { error })
+        } else {
+          logger.error('Failed to get air quality', { error })
+        }
+      }
       // Fallback: assume good
       return {
         index: 0,

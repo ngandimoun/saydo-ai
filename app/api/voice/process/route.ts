@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
       audioBase64,
       mimeType,
       sourceRecordingId,
+      skipSaveItems: true, // Skip saving items - user will confirm via "Done" button
     });
 
     console.log('[voice/process] Workflow result', {
