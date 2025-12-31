@@ -1,4 +1,7 @@
 import { Memory } from "@mastra/memory";
+import { PostgresStore, PgVector } from "@mastra/pg";
+import type { StorageThreadType } from "@mastra/core/memory";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 /**
@@ -34,6 +37,21 @@ export const saydoWorkingMemoryTemplate = `
   <preferred_content_types>{{preferredContentTypes}}</preferred_content_types>
   <generation_preferences>{{generationPreferences}}</generation_preferences>
 </content_generation>
+
+<skincare_context>
+  <skin_type>{{skinType}}</skin_type>
+  <skin_conditions>{{skinConditions}}</skin_conditions>
+  <skin_goals>{{skinGoals}}</skin_goals>
+  <current_routine>{{currentRoutine}}</current_routine>
+  <routine_streak>{{routineStreak}}</routine_streak>
+</skincare_context>
+
+<health_context>
+  <health_score>{{healthScore}}</health_score>
+  <health_streak>{{healthStreak}}</health_streak>
+  <recent_biomarkers>{{recentBiomarkers}}</recent_biomarkers>
+  <active_interventions>{{activeInterventions}}</active_interventions>
+</health_context>
 
 <task_patterns>
   <preferred_times>{{preferredTimes}}</preferred_times>
@@ -111,7 +129,9 @@ export type WorkingMemory = z.infer<typeof WorkingMemorySchema>;
  * Features:
  * - Extended working memory with onboarding and voice context
  * - Message history for recent conversations
- * - Semantic recall disabled (requires vector DB)
+ * - Semantic recall enabled with Supabase pgvector
+ * 
+ * Note: This config object is for reference. Actual configuration is in createSaydoMemory().
  */
 export const saydoMemoryConfig = {
   lastMessages: 20, // Keep last 20 messages in context
@@ -119,18 +139,152 @@ export const saydoMemoryConfig = {
     enabled: true,
     template: saydoWorkingMemoryTemplate,
   },
-  semanticRecall: false, // Disable semantic recall (requires vector DB)
+  semanticRecall: true, // Enabled with Supabase pgvector
 };
 
 /**
+ * Gets Supabase database connection string.
+ * Requires SUPABASE_DATABASE_URL environment variable.
+ * 
+ * IMPORTANT: Use the connection pooling URL, not the direct database URL.
+ * 
+ * To get your connection string:
+ * 1. Go to Supabase Dashboard > Settings > Database
+ * 2. Find "Connection string" section
+ * 3. Select "Connection pooling" tab (NOT "Direct connection")
+ * 4. Select "URI" mode
+ * 5. Copy the connection string (should look like: postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres)
+ * 6. Replace [YOUR-PASSWORD] with your database password
+ * 7. Add to .env.local as SUPABASE_DATABASE_URL
+ * 
+ * The connection pooling URL is required for serverless environments and provides better connection management.
+ */
+function getSupabaseConnectionString(): string {
+  const dbUrl = process.env.SUPABASE_DATABASE_URL;
+  
+  if (!dbUrl) {
+    throw new Error(
+      "SUPABASE_DATABASE_URL is required for Mastra Memory with Supabase Postgres.\n\n" +
+      "To get your connection string:\n" +
+      "1. Go to Supabase Dashboard > Settings > Database\n" +
+      "2. Click on 'Connection pooling' tab (NOT 'Direct connection')\n" +
+      "3. Select 'URI' mode\n" +
+      "4. Copy the connection string\n" +
+      "5. Replace [YOUR-PASSWORD] with your database password\n" +
+      "6. Add to .env.local as SUPABASE_DATABASE_URL\n\n" +
+      "Format should be: postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres"
+    );
+  }
+  
+  // Validate that it's using the pooler format (not direct db connection)
+  if (dbUrl.includes("db.") && dbUrl.includes(".supabase.co:5432")) {
+    throw new Error(
+      "Invalid connection string format. You're using the direct database connection.\n\n" +
+      "Please use the Connection Pooling URL instead:\n" +
+      "1. Go to Supabase Dashboard > Settings > Database\n" +
+      "2. Click on 'Connection pooling' tab\n" +
+      "3. Select 'URI' mode\n" +
+      "4. Copy that connection string (should contain 'pooler.supabase.com' and port 6543)\n\n" +
+      "The direct connection (port 5432) doesn't work well in serverless environments."
+    );
+  }
+  
+  return dbUrl;
+}
+
+/**
+ * Creates a Postgres storage instance for Mastra Memory using Supabase.
+ */
+function createStorage() {
+  const connectionString = getSupabaseConnectionString();
+  
+  return new PostgresStore({
+    id: "saydo-memory-storage",
+    connectionString,
+  });
+}
+
+/**
+ * Gets the storage instance from memory for direct thread operations.
+ * This is a helper to access storage methods when Memory API doesn't expose them directly.
+ */
+export function getMemoryStorage() {
+  return createStorage();
+}
+
+/**
+ * Helper function to get a thread by resource ID using the correct Mastra API.
+ * 
+ * The PostgresStore doesn't have a direct getThreadByResourceId method.
+ * Instead, we need to:
+ * 1. Get the memory domain store
+ * 2. Use listThreadsByResourceId which returns a paginated list
+ * 3. Return the first thread (or null if none exists)
+ * 
+ * @param storage - The PostgresStore instance
+ * @param resourceId - The resource ID (userId) to find threads for
+ * @returns The first thread for the resource, or null if none exists
+ */
+export async function getThreadByResourceId(
+  storage: ReturnType<typeof createStorage>,
+  resourceId: string
+): Promise<StorageThreadType | null> {
+  // Ensure storage is initialized
+  await storage.init();
+  
+  // Get the memory domain store
+  const memoryStore = await storage.getStore('memory');
+  if (!memoryStore) {
+    throw new Error('Memory storage domain not available');
+  }
+  
+  // Use listThreadsByResourceId to get threads for this resource
+  const { threads } = await memoryStore.listThreadsByResourceId({ 
+    resourceId,
+    perPage: 1, // We only need the first thread
+    page: 0
+  });
+  
+  // Return the first thread or null
+  return threads[0] || null;
+}
+
+/**
+ * Creates a PgVector instance for semantic recall using Supabase pgvector.
+ */
+function createVectorStore() {
+  const connectionString = getSupabaseConnectionString();
+  
+  return new PgVector({
+    id: "saydo-memory-vector",
+    connectionString,
+  });
+}
+
+/**
  * Creates a Memory instance for Saydo agents.
- * Uses the default storage configured in Mastra.
+ * Configures Supabase Postgres storage with pgvector for semantic recall.
+ * Uses OpenAI embeddings for vector generation.
  */
 export function createSaydoMemory(): Memory {
+  const storage = createStorage();
+  const vector = createVectorStore();
+  
   return new Memory({
+    storage,
+    vector,
+    embedder: openai.embedding("text-embedding-3-small"),
     options: {
       lastMessages: 20,
-      semanticRecall: false,
+      workingMemory: {
+        enabled: true,
+        template: saydoWorkingMemoryTemplate,
+      },
+      semanticRecall: {
+        topK: 5,
+        messageRange: 2,
+        scope: "resource",
+      },
     },
   });
 }
@@ -140,6 +294,27 @@ export function createSaydoMemory(): Memory {
  * Used when registering with Mastra.
  */
 export const saydoMemory = createSaydoMemory();
+
+/**
+ * Skincare context interface for working memory
+ */
+export interface SkincareContext {
+  skinType?: string;
+  skinConditions?: string[];
+  skinGoals?: string[];
+  currentRoutine?: string;
+  routineStreak?: number;
+}
+
+/**
+ * Health context interface for working memory
+ */
+export interface HealthContext {
+  healthScore?: number;
+  healthStreak?: number;
+  recentBiomarkers?: string[];
+  activeInterventions?: string[];
+}
 
 /**
  * Full user context interface for working memory initialization
@@ -152,6 +327,8 @@ export interface FullUserContext {
   socialPlatforms?: string[];
   newsFocus?: string[];
   healthInterests?: string[];
+  skincareContext?: SkincareContext;
+  healthContext?: HealthContext;
 }
 
 /**
@@ -210,6 +387,21 @@ export function getInitialWorkingMemory(userContext: {
   <generation_preferences></generation_preferences>
 </content_generation>
 
+<skincare_context>
+  <skin_type></skin_type>
+  <skin_conditions></skin_conditions>
+  <skin_goals></skin_goals>
+  <current_routine></current_routine>
+  <routine_streak>0</routine_streak>
+</skincare_context>
+
+<health_context>
+  <health_score></health_score>
+  <health_streak>0</health_streak>
+  <recent_biomarkers></recent_biomarkers>
+  <active_interventions></active_interventions>
+</health_context>
+
 <task_patterns>
   <preferred_times></preferred_times>
   <common_categories></common_categories>
@@ -234,6 +426,9 @@ export function getFullWorkingMemory(
   voiceContext?: VoiceHistoryContext,
   contentContext?: ContentGenerationContext
 ): string {
+  const skincare = userContext.skincareContext || {};
+  const health = userContext.healthContext || {};
+  
   return `
 <user_context>
   <name>${userContext.preferredName}</name>
@@ -263,6 +458,21 @@ export function getFullWorkingMemory(
   <preferred_content_types>${(contentContext?.preferredContentTypes || []).join(", ")}</preferred_content_types>
   <generation_preferences>${contentContext?.generationPreferences || ""}</generation_preferences>
 </content_generation>
+
+<skincare_context>
+  <skin_type>${skincare.skinType || ""}</skin_type>
+  <skin_conditions>${(skincare.skinConditions || []).join(", ")}</skin_conditions>
+  <skin_goals>${(skincare.skinGoals || []).join(", ")}</skin_goals>
+  <current_routine>${skincare.currentRoutine || ""}</current_routine>
+  <routine_streak>${skincare.routineStreak || 0}</routine_streak>
+</skincare_context>
+
+<health_context>
+  <health_score>${health.healthScore || ""}</health_score>
+  <health_streak>${health.healthStreak || 0}</health_streak>
+  <recent_biomarkers>${(health.recentBiomarkers || []).join(", ")}</recent_biomarkers>
+  <active_interventions>${(health.activeInterventions || []).join(", ")}</active_interventions>
+</health_context>
 
 <task_patterns>
   <preferred_times></preferred_times>

@@ -7,6 +7,8 @@ import { taskAgent } from "./agents/task-agent";
 import { healthAgent } from "./agents/health-agent";
 import { smartAgent } from "./agents/smart-agent";
 import { contentAgent } from "./agents/content-agent";
+import { healthDocumentAgent } from "./agents/health-document-agent";
+import { skincareAgent } from "./agents/skincare-agent";
 
 // Tools
 import { getUserProfileTool } from "./tools/user-profile-tool";
@@ -28,11 +30,55 @@ import {
   archiveAIDocumentTool,
   getAIDocumentByIdTool,
 } from "./tools/content-generation-tool";
+import {
+  getWorkFilesTool,
+  findMatchingFileTool,
+  extractFileContentTool,
+  analyzeFileContentTool,
+} from "./tools/file-vault-tool";
+
+// Health Document Tools
+import { classifyHealthDocumentTool } from "./tools/health-classifier-tool";
+import {
+  analyzeFoodTool,
+  analyzeSupplementTool,
+  analyzeDrinkTool,
+  analyzeLabResultsTool,
+  analyzeMedicationTool,
+  analyzeGeneralHealthDocTool,
+  storeHealthAnalysisTool,
+} from "./tools/health-analysis-tools";
+import {
+  getHealthContextTool,
+  getRecentHealthDocumentsTool,
+  getBiomarkerHistoryTool,
+} from "./tools/health-context-tool";
+// Health Engagement Tools
+import {
+  generateRecommendationsTool,
+  generateMealPlanTool,
+  createInterventionTool,
+  updateHealthScoreTool,
+  updateStreakTool,
+  checkAchievementsTool,
+  generateDailyChallengesTool,
+} from "./tools/health-engagement-tools";
+// Skincare Tools
+import {
+  analyzeSkincareProductTool,
+  analyzeSkinTool,
+  generateSkincareRoutineTool,
+  checkIngredientCompatibilityTool,
+  getSkincareRecommendationsTool,
+  updateSkincareProfileTool,
+  logSkincareRoutineTool,
+} from "./tools/skincare-tools";
 
 // Workflows
 import { voiceProcessingWorkflow } from "./workflows/voice-processing-workflow";
 import { healthAnalysisWorkflow } from "./workflows/health-analysis-workflow";
 import { dailySummaryWorkflow } from "./workflows/daily-summary-workflow";
+import { smartUploadWorkflow } from "./workflows/smart-upload-workflow";
 
 // Memory
 import { saydoMemory } from "./memory/config";
@@ -54,6 +100,8 @@ export const mastra = new Mastra({
     healthAgent,
     smartAgent,
     contentAgent,
+    healthDocumentAgent,
+    skincareAgent,
   },
   tools: {
     // User profile
@@ -85,11 +133,46 @@ export const mastra = new Mastra({
     deleteAIDocument: deleteAIDocumentTool,
     archiveAIDocument: archiveAIDocumentTool,
     getAIDocumentById: getAIDocumentByIdTool,
+    // File Vault Tools
+    getWorkFiles: getWorkFilesTool,
+    findMatchingFile: findMatchingFileTool,
+    extractFileContent: extractFileContentTool,
+    analyzeFileContent: analyzeFileContentTool,
+    // Health Document Tools
+    classifyHealthDocument: classifyHealthDocumentTool,
+    analyzeFood: analyzeFoodTool,
+    analyzeSupplement: analyzeSupplementTool,
+    analyzeDrink: analyzeDrinkTool,
+    analyzeLabResults: analyzeLabResultsTool,
+    analyzeMedication: analyzeMedicationTool,
+    analyzeGeneralHealthDoc: analyzeGeneralHealthDocTool,
+    storeHealthAnalysis: storeHealthAnalysisTool,
+    // Health Context Tools
+    getHealthContext: getHealthContextTool,
+    getRecentHealthDocuments: getRecentHealthDocumentsTool,
+    getBiomarkerHistory: getBiomarkerHistoryTool,
+    // Health Engagement Tools
+    generateRecommendations: generateRecommendationsTool,
+    generateMealPlan: generateMealPlanTool,
+    createIntervention: createInterventionTool,
+    updateHealthScore: updateHealthScoreTool,
+    updateStreak: updateStreakTool,
+    checkAchievements: checkAchievementsTool,
+    generateDailyChallenges: generateDailyChallengesTool,
+    // Skincare Tools
+    analyzeSkincareProduct: analyzeSkincareProductTool,
+    analyzeSkin: analyzeSkinTool,
+    generateSkincareRoutine: generateSkincareRoutineTool,
+    checkIngredientCompatibility: checkIngredientCompatibilityTool,
+    getSkincareRecommendations: getSkincareRecommendationsTool,
+    updateSkincareProfile: updateSkincareProfileTool,
+    logSkincareRoutine: logSkincareRoutineTool,
   },
   workflows: {
     voiceProcessingWorkflow,
     healthAnalysisWorkflow,
     dailySummaryWorkflow,
+    smartUploadWorkflow,
   },
   memory: {
     saydo: saydoMemory,
@@ -103,6 +186,7 @@ export { taskAgent, createTaskAgent } from "./agents/task-agent";
 export { healthAgent, createHealthAgent } from "./agents/health-agent";
 export { smartAgent, createSmartAgent, analyzeTranscription } from "./agents/smart-agent";
 export { contentAgent, createContentAgent, generateContent, generateBatchContent } from "./agents/content-agent";
+export { skincareAgent, createSkincareAgent, type SkincareProfile } from "./agents/skincare-agent";
 
 // Export tools
 export { getUserProfileTool, getUserContext, getFullUserContext, getUserTimezone, type UserContext, type FullUserContext } from "./tools/user-profile-tool";
@@ -127,11 +211,58 @@ export {
   saveGeneratedContent,
   contentGenerationTools,
 } from "./tools/content-generation-tool";
+export {
+  getWorkFilesTool,
+  findMatchingFileTool,
+  extractFileContentTool,
+  analyzeFileContentTool,
+  fileVaultTools,
+} from "./tools/file-vault-tool";
 
 // Export workflows
 export { voiceProcessingWorkflow, processVoiceRecording } from "./workflows/voice-processing-workflow";
 export { healthAnalysisWorkflow, analyzeHealth } from "./workflows/health-analysis-workflow";
 export { dailySummaryWorkflow, generateDailySummary } from "./workflows/daily-summary-workflow";
+export { smartUploadWorkflow, processHealthUpload } from "./workflows/smart-upload-workflow";
+
+// Export health document agent and tools
+export { healthDocumentAgent, createHealthDocumentAgent, analyzeHealthDocument } from "./agents/health-document-agent";
+export { classifyHealthDocumentTool, classifyHealthDocument, type HealthDocumentType } from "./tools/health-classifier-tool";
+export {
+  analyzeFoodTool,
+  analyzeSupplementTool,
+  analyzeDrinkTool,
+  analyzeLabResultsTool,
+  analyzeMedicationTool,
+  analyzeGeneralHealthDocTool,
+  storeHealthAnalysisTool,
+  healthAnalysisTools,
+} from "./tools/health-analysis-tools";
+export {
+  getHealthContextTool,
+  getRecentHealthDocumentsTool,
+  getBiomarkerHistoryTool,
+  getHealthContext,
+  healthContextTools,
+} from "./tools/health-context-tool";
+export {
+  generateRecommendationsTool,
+  generateMealPlanTool,
+  createInterventionTool,
+  updateHealthScoreTool,
+  updateStreakTool,
+  checkAchievementsTool,
+  generateDailyChallengesTool,
+} from "./tools/health-engagement-tools";
+export {
+  analyzeSkincareProductTool,
+  analyzeSkinTool,
+  generateSkincareRoutineTool,
+  checkIngredientCompatibilityTool,
+  getSkincareRecommendationsTool,
+  updateSkincareProfileTool,
+  logSkincareRoutineTool,
+} from "./tools/skincare-tools";
 
 // Export memory
 export {

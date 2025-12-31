@@ -34,16 +34,20 @@ export class RealtimeManager {
   private retryAttempts: Map<string, number> = new Map()
   private readonly MAX_RETRIES = 3
   private readonly INITIAL_RETRY_DELAY = 1000 // 1 second
-  private readonly INITIALIZATION_PERIOD = 3000 // 3 seconds
-  private initializationTime: number = Date.now()
+  private readonly INITIALIZATION_PERIOD = 5000 // 5 seconds (matches Supabase connection stabilization)
+  private firstSubscriptionTime: number | null = null // Track when first subscription is made
   private connectionState: 'initializing' | 'connected' | 'disconnected' = 'initializing'
+  private hasConnectedSuccessfully = false // Track if we've ever connected successfully
 
   /**
-   * Check if Supabase client is ready (past initialization period)
+   * Check if Supabase client is ready (past initialization period from first subscription)
    */
   isReady(): boolean {
-    const timeSinceInit = Date.now() - this.initializationTime
-    return timeSinceInit > this.INITIALIZATION_PERIOD
+    if (!this.firstSubscriptionTime) {
+      return false // Not ready until first subscription is attempted
+    }
+    const timeSinceFirstSubscription = Date.now() - this.firstSubscriptionTime
+    return timeSinceFirstSubscription > this.INITIALIZATION_PERIOD
   }
 
   /**
@@ -54,10 +58,40 @@ export class RealtimeManager {
   }
 
   /**
+   * Check if an error is a transient connection error that should be logged as warning
+   */
+  private isTransientError(err: Error | undefined): boolean {
+    if (!err) return true // Empty errors are typically transient
+    
+    const message = err.message?.toLowerCase() || ''
+    const transientPatterns = [
+      'close',
+      'disconnect',
+      'connection',
+      'timeout',
+      'network',
+      'socket',
+      'websocket',
+      'econnreset',
+      'econnrefused',
+      'etimedout',
+      'abort',
+    ]
+    
+    return transientPatterns.some(pattern => message.includes(pattern))
+  }
+
+  /**
    * Subscribe to real-time updates for a table
    */
   subscribe(options: RealtimeSubscriptionOptions): () => void {
     const { table, userId, onInsert, onUpdate, onDelete, filter } = options
+    
+    // Track first subscription time for initialization period
+    if (!this.firstSubscriptionTime) {
+      this.firstSubscriptionTime = Date.now()
+      logger.debug('Realtime first subscription initiated', { table, userId })
+    }
     
     // Create channel name
     const channelName = `${table}:${userId}`
@@ -99,55 +133,70 @@ export class RealtimeManager {
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           this.connectionState = 'connected'
+          this.hasConnectedSuccessfully = true
           logger.info('Realtime subscription active', { channelName, table })
           // Reset retry counter on successful subscription
           this.retryAttempts.delete(channelName)
         } else if (status === 'CHANNEL_ERROR') {
+          const isInitializing = this.isInitializing()
+          const isTransient = this.isTransientError(err)
+          const retryCount = this.retryAttempts.get(channelName) || 0
+          
           const errorDetails = {
             channelName,
             table,
-            error: err,
-            errorMessage: err?.message,
-            errorStack: err?.stack,
+            isInitializing,
+            isTransient,
+            hasConnectedBefore: this.hasConnectedSuccessfully,
+            retryCount,
+            errorMessage: err?.message || 'No error message',
             errorName: err?.name,
-            errorCode: (err as any)?.code,
-            errorDetails: err ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : undefined,
+            errorCode: (err as Record<string, unknown>)?.code,
           }
           
-          // During initialization, log as debug/warn instead of error
-          if (this.isInitializing()) {
-            logger.debug('Realtime subscription error during initialization', errorDetails)
+          // Determine log level based on context
+          if (isInitializing) {
+            // During initialization, always use debug level - these are expected
+            logger.debug('Realtime subscription initializing', errorDetails)
+          } else if (isTransient) {
+            // Transient errors after initialization are warnings (will retry)
+            logger.warn('Realtime subscription transient error', errorDetails)
+          } else if (!this.hasConnectedSuccessfully && retryCount < this.MAX_RETRIES) {
+            // First connection attempts that fail are warnings until max retries
+            logger.warn('Realtime subscription connecting', errorDetails)
           } else {
-            // Check if it's a connection close error (transient)
-            const isConnectionError = err?.message?.includes('close') || 
-                                     err?.message?.includes('disconnect') ||
-                                     err?.message?.includes('connection')
-            
-            if (isConnectionError) {
-              logger.warn('Realtime subscription connection error', errorDetails)
-            } else {
-              logger.error('Realtime subscription error', errorDetails)
-            }
+            // Real errors that aren't transient and we've exhausted retries
+            logger.error('Realtime subscription error', {
+              ...errorDetails,
+              errorStack: err?.stack,
+              errorDetails: err ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : undefined,
+            })
           }
           
           // Attempt retry with exponential backoff
           this.attemptRetry(channelName, options)
         } else {
-          // During initialization, reduce log level
-          if (this.isInitializing() && status !== 'SUBSCRIBED') {
-            logger.debug('Realtime subscription status change during initialization', { 
+          // Handle other status changes (CLOSED, TIMED_OUT, etc.)
+          const isInitializing = this.isInitializing()
+          
+          if (isInitializing) {
+            logger.debug('Realtime subscription status during initialization', { 
               channelName, 
               table, 
-              status, 
-              error: err?.message 
+              status,
+            })
+          } else if (status === 'CLOSED' || status === 'TIMED_OUT') {
+            // These are typically transient and will reconnect
+            logger.debug('Realtime subscription status change', { 
+              channelName, 
+              table, 
+              status,
             })
           } else {
-            logger.warn('Realtime subscription status change', { 
+            logger.info('Realtime subscription status', { 
               channelName, 
               table, 
-              status, 
-              error: err,
-              errorMessage: err?.message 
+              status,
             })
           }
         }
@@ -166,23 +215,36 @@ export class RealtimeManager {
     const currentAttempts = this.retryAttempts.get(channelName) || 0
     
     if (currentAttempts >= this.MAX_RETRIES) {
-      logger.error('Realtime subscription max retries exceeded', {
-        channelName,
-        table: options.table,
-        maxRetries: this.MAX_RETRIES,
-      })
+      // Only log as error if we never successfully connected
+      if (!this.hasConnectedSuccessfully) {
+        logger.error('Realtime subscription max retries exceeded', {
+          channelName,
+          table: options.table,
+          maxRetries: this.MAX_RETRIES,
+        })
+      } else {
+        // If we connected before, this is likely a temporary network issue
+        logger.warn('Realtime subscription reconnection max retries exceeded', {
+          channelName,
+          table: options.table,
+          maxRetries: this.MAX_RETRIES,
+        })
+      }
       return
     }
 
     const delay = this.INITIAL_RETRY_DELAY * Math.pow(2, currentAttempts)
     this.retryAttempts.set(channelName, currentAttempts + 1)
 
-    logger.warn('Retrying Realtime subscription', {
+    // Use debug level during initialization, info otherwise
+    const logLevel = this.isInitializing() ? 'debug' : 'info'
+    logger[logLevel]('Retrying Realtime subscription', {
       channelName,
       table: options.table,
       attempt: currentAttempts + 1,
       maxRetries: this.MAX_RETRIES,
       delayMs: delay,
+      isInitializing: this.isInitializing(),
     })
 
     setTimeout(() => {

@@ -46,11 +46,11 @@ export const GeneratedContentSchema = z.object({
   content: z.string().describe("The full generated content"),
   previewText: z.string().describe("First 200 chars for preview"),
   
-  // Multiple versions (for posts, etc.)
+  // Alternative versions (context-dependent - only include when appropriate)
   alternativeVersions: z.array(z.object({
     content: z.string(),
     style: z.string().describe("Style of this version: formal, casual, creative, etc."),
-  })).optional().describe("Alternative versions of the content"),
+  })).optional().describe("Alternative versions of the content. Only include when the document style and context benefit from multiple variations (e.g., creative content, social posts, marketing materials). Do NOT include for formal documents, reports, summaries, or technical documentation."),
   
   // Metadata
   tags: z.array(z.string()).describe("Auto-extracted tags"),
@@ -97,8 +97,7 @@ function getFormatGuidelines(contentType: string): string {
 - Use engaging hooks
 - Include relevant hashtags
 - Consider emoji usage
-- End with call-to-action or thought-provoking question
-- Generate 3-5 alternative versions with different angles`,
+- End with call-to-action or thought-provoking question`,
 
     email: `- Clear subject line suggestion
 - Professional greeting
@@ -215,9 +214,30 @@ As content for a ${profession}, ensure:
 1. **Extract relevant information** from the voice context
 2. **Synthesize** into coherent, well-structured content
 3. **Adapt format** based on content type and profession
-4. **Generate alternatives** for social posts (3-5 versions)
-5. **Include appropriate tags** extracted from content
-6. **All content must be in ${languageName}**
+4. **Include appropriate tags** extracted from content
+5. **All content must be in ${languageName}**
+
+## ALTERNATIVE VERSIONS (Context-Aware)
+
+**IMPORTANT**: Alternative versions should only be generated when they add value based on the document style and context.
+
+**Generate alternatives when:**
+- Content is creative or social in nature (social posts, tweets, creative marketing content)
+- Multiple angles or styles would benefit the user (A/B testing variations, different tones)
+- Content is meant for public sharing where style variations are valuable
+- The document style is informal, engaging, or promotional
+
+**DO NOT generate alternatives when:**
+- Content is formal documentation (reports, summaries, meeting notes)
+- Content is structured and factual (shift reports, repair logs, technical documentation)
+- Single authoritative version is required (official memos, professional emails)
+- The document style is formal, technical, or informational
+
+**Decision criteria:**
+- Consider the document style (creative vs formal)
+- Consider the content context (social sharing vs documentation)
+- Consider user intent and document purpose
+- Only generate 3-5 alternative versions when appropriate
 
 ## LANGUAGE REQUIREMENT
 **CRITICAL**: All generated content MUST be in ${languageName}.
@@ -308,7 +328,7 @@ ${contentRequest.additionalInstructions ? `- Additional Instructions: ${contentR
 1. Review the voice context in my instructions
 2. Extract relevant information for this content type
 3. Generate professional, well-formatted content
-4. For social posts, generate 3-5 alternative versions
+4. Consider whether alternative versions would add value based on document style and context (see alternative versions guidelines in instructions)
 5. Extract appropriate tags
 
 Use the output-generated-content tool to return the content.

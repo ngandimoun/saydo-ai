@@ -703,3 +703,5 @@ export function calculatePatternConfidence(
   return Math.round(baseConfidence * qualityMultiplier);
 }
 
+
+

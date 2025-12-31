@@ -21,45 +21,33 @@ export interface UseRealtimeOptions {
 export function useRealtime(options: UseRealtimeOptions) {
   const { table, userId, onInsert, onUpdate, onDelete, enabled = true } = options
   const unsubscribeRef = useRef<(() => void) | null>(null)
-  const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
+    mountedRef.current = true
+    
     if (!enabled || !userId) return
 
     const manager = getRealtimeManager()
 
-    // Wait for client to be ready before subscribing
-    const attemptSubscribe = () => {
-      if (manager.isReady()) {
-        unsubscribeRef.current = manager.subscribe({
-          table,
-          userId,
-          onInsert,
-          onUpdate,
-          onDelete,
-        })
+    // Subscribe immediately - the RealtimeManager handles initialization internally
+    // and will suppress errors during the initialization period
+    unsubscribeRef.current = manager.subscribe({
+      table,
+      userId,
+      onInsert,
+      onUpdate,
+      onDelete,
+    })
 
-        logger.info('Realtime subscription created', { table, userId })
-      } else {
-        // Wait a bit and try again
-        readyTimeoutRef.current = setTimeout(() => {
-          attemptSubscribe()
-        }, 500)
-      }
-    }
-
-    // Start subscription attempt
-    attemptSubscribe()
+    logger.debug('Realtime subscription initiated', { table, userId })
 
     return () => {
-      if (readyTimeoutRef.current) {
-        clearTimeout(readyTimeoutRef.current)
-        readyTimeoutRef.current = null
-      }
+      mountedRef.current = false
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
         unsubscribeRef.current = null
-        logger.info('Realtime subscription removed', { table, userId })
+        logger.debug('Realtime subscription cleaned up', { table, userId })
       }
     }
   }, [table, userId, enabled, onInsert, onUpdate, onDelete])

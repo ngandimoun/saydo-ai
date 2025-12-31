@@ -64,3 +64,5 @@ export function useInvalidateUrgentAlerts() {
   return () => queryClient.invalidateQueries({ queryKey: QUERY_KEY })
 }
 
+
+

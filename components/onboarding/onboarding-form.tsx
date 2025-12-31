@@ -13,6 +13,7 @@ import { ProfessionStep } from "./steps/profession-step"
 import { InformationDietStep } from "./steps/information-diet-step"
 import { EssentialsStep } from "./steps/essentials-step"
 import { HealthStep } from "./steps/health-step"
+import { SkincareStep } from "./steps/skincare-step"
 
 export interface OnboardingData {
   language: string
@@ -39,9 +40,14 @@ export interface OnboardingData {
   allergies: string[]
   skinTone: string
   healthInterests: string[]
+  // Skincare data
+  skinType?: string
+  skinConditions?: string[]
+  skinGoals?: string[]
+  skinConcerns?: string
 }
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 7
 
 export function OnboardingForm() {
   const { t } = useLanguage()
@@ -63,7 +69,11 @@ export function OnboardingForm() {
     weight: null,
     allergies: [],
     skinTone: '',
-    healthInterests: []
+    healthInterests: [],
+    skinType: undefined,
+    skinConditions: [],
+    skinGoals: [],
+    skinConcerns: undefined
   })
 
   const updateFormData = (updates: Partial<OnboardingData>) => {
@@ -153,6 +163,23 @@ export function OnboardingForm() {
 
         if (healthInterestsError) {
           throw new Error(`Failed to save health interests: ${healthInterestsError.message}`)
+        }
+      }
+
+      // Save skincare profile
+      if (formData.skinType) {
+        const { error: skincareError } = await supabase
+          .from('skincare_profiles')
+          .upsert({
+            user_id: user.id,
+            skin_type: formData.skinType,
+            skin_conditions: formData.skinConditions || [],
+            skin_goals: formData.skinGoals || [],
+            skin_concerns: formData.skinConcerns || null,
+          })
+
+        if (skincareError) {
+          throw new Error(`Failed to save skincare profile: ${skincareError.message}`)
         }
       }
 
@@ -264,6 +291,8 @@ export function OnboardingForm() {
         return true // Optional step
       case 6:
         return formData.healthInterests.length > 0
+      case 7:
+        return true // Skincare step is optional
       default:
         return false
     }
@@ -332,6 +361,13 @@ export function OnboardingForm() {
           {currentStep === 6 && (
             <HealthStep
               key="health"
+              data={formData}
+              updateData={updateFormData}
+            />
+          )}
+          {currentStep === 7 && (
+            <SkincareStep
+              key="skincare"
               data={formData}
               updateData={updateFormData}
             />

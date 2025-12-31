@@ -1,4 +1,4 @@
-import { _ as __commonJS, a as __require2, r as require_token_error } from './index.mjs';
+import { _ as __commonJS, c as __require2, r as require_token_error } from './index.mjs';
 
 // ../memory/dist/chunk-WC4XBMZT.js
 var require_token_io = __commonJS({

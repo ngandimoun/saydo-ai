@@ -443,7 +443,12 @@ export interface HealthStatus {
   stress: number // 0-100 percentage
   recovery: number // 0-100 percentage
   lastUpdated: Date
-  source?: 'wearable' | 'manual' | 'inferred'
+  source?: 'wearable' | 'manual' | 'inferred' | 'calculated'
+  trends?: {
+    energy: 'up' | 'down' | 'stable'
+    stress: 'up' | 'down' | 'stable'
+    recovery: 'up' | 'down' | 'stable'
+  }
 }
 
 /**
@@ -480,11 +485,12 @@ export interface ProactiveIntervention {
   type: 'uv_advisor' | 'blood_group_fueling' | 'allergy_guardian' | 'recovery_adjuster' | 
         'pdf_interpreter' | 'voice_stress' | 'hydration_safety' | 'jetlag_biosync' | 
         'longevity_tracker' | 'sleep_strategy' | 'pre_meeting' | 'late_night' | 
-        'environmental_shield' | 'supplement_verification' | 'cognitive_load'
+        'environmental_shield' | 'supplement_verification' | 'cognitive_load' |
+        'skincare_routine' | 'sunscreen_reminder'
   title: string
   description: string
   urgencyLevel: UrgencyLevel
-  category: 'health' | 'nutrition' | 'environment' | 'recovery' | 'cognitive'
+  category: 'health' | 'nutrition' | 'environment' | 'recovery' | 'cognitive' | 'skincare'
   context?: {
     location?: string // e.g., "Kigali, Rwanda"
     time?: string // e.g., "11:30 AM"
@@ -498,6 +504,7 @@ export interface ProactiveIntervention {
   validUntil?: Date
   createdAt: Date
   isDismissed?: boolean
+  useCaseData?: Record<string, any> // Type-specific data (UV index, HRV, etc.)
 }
 
 /**
@@ -752,5 +759,95 @@ export interface FoodAnalysis {
     timing?: string // Best time to consume (e.g., "with breakfast for better iron absorption")
   }
   analyzedAt: Date
+}
+
+// ============================================
+// SKINCARE TYPES
+// ============================================
+
+/**
+ * Skincare Profile
+ * User's skin characteristics and goals
+ */
+export interface SkincareProfile {
+  id: string
+  userId: string
+  skinType?: 'oily' | 'dry' | 'combination' | 'sensitive' | 'normal'
+  skinConditions?: string[]
+  skinGoals?: string[]
+  skinConcerns?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+/**
+ * Skincare Product
+ * Analyzed skincare product with ingredient compatibility
+ */
+export interface SkincareProduct {
+  id: string
+  userId: string
+  name: string
+  brand?: string
+  productType?: 'cleanser' | 'toner' | 'serum' | 'moisturizer' | 'sunscreen' | 'treatment' | 'mask' | 'exfoliant' | 'other'
+  ingredients: string[]
+  ingredientAnalysis: Record<string, {
+    rating: 'good' | 'caution' | 'avoid'
+    reason: string
+  }>
+  compatibilityScore: number // 0-100
+  compatibilityNotes?: string
+  productImageUrl?: string
+  isInRoutine: boolean
+  analyzedAt: Date
+  createdAt: Date
+}
+
+/**
+ * Skincare Routine
+ * AM/PM skincare routine with product ordering
+ */
+export interface SkincareRoutine {
+  id: string
+  userId: string
+  routineType: 'am' | 'pm'
+  name?: string
+  productIds: string[]
+  routineData: {
+    products: Array<{
+      id: string
+      name: string
+      type: string
+      waitTime?: string
+      order: number
+    }>
+    timing?: string
+    notes?: string
+  }
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+/**
+ * Skin Analysis
+ * AI-powered skin photo analysis results
+ */
+export interface SkinAnalysis {
+  id: string
+  userId: string
+  imageUrl: string
+  analysisData: Record<string, any>
+  detectedConditions: Record<string, any>
+  acneSeverity?: number // 0-10
+  drynessLevel?: number // 0-10
+  oilinessLevel?: number // 0-10
+  rednessLevel?: number // 0-10
+  hyperpigmentationLevel?: number // 0-10
+  fineLinesLevel?: number // 0-10
+  overallScore: number // 0-100
+  recommendations: string[]
+  analyzedAt: Date
+  createdAt: Date
 }
 

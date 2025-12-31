@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
-import { Briefcase, TrendingUp, Clock, FileText, Sparkles, Calendar, CheckCircle2, ArrowRight } from "lucide-react"
+import { Briefcase, TrendingUp, Clock, FileText, Sparkles, Calendar, CheckCircle2, ArrowRight, Plus, Mic, FolderUp } from "lucide-react"
 import { FileVault } from "@/components/dashboard/pro/file-vault"
 import { AIOutputs } from "@/components/dashboard/pro/ai-outputs"
 import { DailySummary } from "@/components/dashboard/pro/daily-summary"
@@ -25,8 +25,14 @@ import {
   useProductivityStats,
   useInvalidateProData,
   useTasks,
-  useReminders
+  useReminders,
+  useInvalidateTasks,
+  useInvalidateReminders,
+  useProductivityStatsRealtime
 } from "@/hooks/queries"
+import { useQuery } from "@tanstack/react-query"
+import { useProfile } from "@/hooks/queries/use-profile"
+import type { ProductivityStats, SummaryContext } from "@/src/mastra/agents/summary-agent"
 
 /**
  * Pro Life Tab Page - Airbnb-Inspired
@@ -64,14 +70,22 @@ export default function ProPage() {
   const { data: aiDocuments = [], isLoading: documentsLoading } = useAIDocuments()
   const { data: endOfDaySummary, isLoading: summaryLoading } = useEndOfDaySummary()
   const { data: productivityStats = {
-    tasksCompleted: 0,
-    focusTime: '0h 0m',
-    meetings: 0,
-    aiAssists: 0,
+    tasksCreated: 0,
+    aiDocumentsGenerated: 0,
+    voiceNotesRecorded: 0,
+    workFilesUploaded: 0,
   }, isLoading: statsLoading } = useProductivityStats()
   const { data: tasks = [] } = useTasks({ includeCompleted: false, limit: 5 })
   const { data: reminders = [] } = useReminders({ includeCompleted: false, limit: 5 })
   const [upcomingReminder, setUpcomingReminder] = useState<Reminder | null>(null)
+
+  // Get invalidate functions for refreshing data
+  const invalidateProData = useInvalidateProData()
+  const invalidateTasks = useInvalidateTasks()
+  const invalidateReminders = useInvalidateReminders()
+
+  // Enable real-time updates for productivity stats
+  useProductivityStatsRealtime()
 
   // Find next upcoming reminder
   useEffect(() => {
@@ -82,26 +96,109 @@ export default function ProPage() {
     setUpcomingReminder(upcoming || null)
   }, [reminders])
 
+  // Auto-refresh data when voice processing completes
+  useEffect(() => {
+    const handleVoiceProcessingComplete = () => {
+      logger.info('[ProPage] Voice processing complete, refreshing data')
+      invalidateProData()
+      invalidateTasks()
+      invalidateReminders()
+    }
+
+    const handleTasksUpdated = () => {
+      logger.info('[ProPage] Tasks updated, refreshing data')
+      invalidateProData()
+      invalidateTasks()
+      invalidateReminders()
+    }
+
+    // Listen for voice processing completion events
+    if (typeof window !== 'undefined') {
+      window.addEventListener('voice-processing-complete', handleVoiceProcessingComplete)
+      window.addEventListener('tasks-updated', handleTasksUpdated)
+
+      // Cleanup event listeners on unmount
+      return () => {
+        window.removeEventListener('voice-processing-complete', handleVoiceProcessingComplete)
+        window.removeEventListener('tasks-updated', handleTasksUpdated)
+      }
+    }
+  }, [invalidateProData, invalidateTasks, invalidateReminders])
+
   const isLoading = filesLoading || documentsLoading || summaryLoading || statsLoading
 
-  // Generate dynamic AI summary
-  const generateAISummary = () => {
+  // Get user profile for language
+  const { data: userProfile } = useProfile()
+
+  // Prepare summary context
+  const summaryContext: SummaryContext | undefined = endOfDaySummary ? {
+    endOfDaySummary: {
+      keyAchievements: endOfDaySummary.keyAchievements,
+      pendingItems: endOfDaySummary.pendingItems,
+      overallProductivity: endOfDaySummary.overallProductivity,
+    },
+    upcomingReminder: upcomingReminder ? {
+      title: upcomingReminder.title,
+      priority: upcomingReminder.priority,
+    } : undefined,
+  } : upcomingReminder ? {
+    upcomingReminder: {
+      title: upcomingReminder.title,
+      priority: upcomingReminder.priority,
+    },
+  } : undefined
+
+  // Generate AI summary using API
+  const { data: aiSummaryData, isLoading: aiSummaryLoading } = useQuery({
+    queryKey: ['ai-summary', productivityStats, endOfDaySummary?.id, upcomingReminder?.id],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/ai-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stats: productivityStats as ProductivityStats,
+          context: summaryContext,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate AI summary')
+      }
+
+      const data = await response.json()
+      return data.summary as string
+    },
+    enabled: !isLoading && !!userProfile, // Only fetch when data is ready
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    retry: 1, // Retry once on failure
+  })
+
+  // Fallback summary generation (English) if API fails or is loading
+  const generateFallbackSummary = () => {
     if (endOfDaySummary) {
       const achievements = endOfDaySummary.keyAchievements?.length || 0
       const pending = endOfDaySummary.pendingItems?.length || 0
       return {
         text: achievements > 0 
           ? `Great progress today! ${achievements} key achievement${achievements > 1 ? 's' : ''} completed. ${pending > 0 ? `${pending} item${pending > 1 ? 's' : ''} still pending.` : 'All items completed!'}`
-          : productivityStats.tasksCompleted > 0
-          ? `You've completed ${productivityStats.tasksCompleted} task${productivityStats.tasksCompleted > 1 ? 's' : ''} today. Keep up the momentum!`
+          : productivityStats.tasksCreated > 0 || productivityStats.voiceNotesRecorded > 0
+          ? `You've created ${productivityStats.tasksCreated} task${productivityStats.tasksCreated !== 1 ? 's' : ''} and recorded ${productivityStats.voiceNotesRecorded} voice note${productivityStats.voiceNotesRecorded !== 1 ? 's' : ''} today. Keep up the momentum!`
           : "Ready to make today productive? Let's get started!",
         hasUpcoming: upcomingReminder !== null
       }
     }
     
-    if (productivityStats.tasksCompleted > 0) {
+    const totalActivity = productivityStats.tasksCreated + productivityStats.voiceNotesRecorded + productivityStats.workFilesUploaded + productivityStats.aiDocumentsGenerated
+    if (totalActivity > 0) {
+      const activities = []
+      if (productivityStats.tasksCreated > 0) activities.push(`${productivityStats.tasksCreated} task${productivityStats.tasksCreated !== 1 ? 's' : ''}`)
+      if (productivityStats.voiceNotesRecorded > 0) activities.push(`${productivityStats.voiceNotesRecorded} voice note${productivityStats.voiceNotesRecorded !== 1 ? 's' : ''}`)
+      if (productivityStats.aiDocumentsGenerated > 0) activities.push(`${productivityStats.aiDocumentsGenerated} AI document${productivityStats.aiDocumentsGenerated !== 1 ? 's' : ''}`)
+      if (productivityStats.workFilesUploaded > 0) activities.push(`${productivityStats.workFilesUploaded} file${productivityStats.workFilesUploaded !== 1 ? 's' : ''}`)
+      
       return {
-        text: `You've been crushing it today! ${productivityStats.tasksCompleted} task${productivityStats.tasksCompleted > 1 ? 's' : ''} completed with ${productivityStats.focusTime} of focused work.`,
+        text: `You've been productive today! ${activities.join(', ')}. Keep it up!`,
         hasUpcoming: upcomingReminder !== null
       }
     }
@@ -126,7 +223,13 @@ export default function ProPage() {
     }
   }
 
-  const aiSummary = generateAISummary()
+  // Use AI-generated summary if available, otherwise fallback
+  const fallbackSummary = generateFallbackSummary()
+  const aiSummary = {
+    text: aiSummaryData || fallbackSummary.text,
+    hasUpcoming: upcomingReminder !== null,
+    isLoading: aiSummaryLoading,
+  }
 
   if (isLoading) {
     return (
@@ -199,10 +302,10 @@ export default function ProPage() {
         {/* Productivity Stats */}
         <motion.div variants={itemVariants} className="grid grid-cols-4 gap-2">
           {[
-            { icon: CheckCircle2, label: 'Done', value: productivityStats.tasksCompleted.toString(), color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            { icon: Clock, label: 'Focus', value: productivityStats.focusTime, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-            { icon: Calendar, label: 'Meetings', value: productivityStats.meetings.toString(), color: 'text-purple-500', bg: 'bg-purple-500/10' },
-            { icon: Sparkles, label: 'AI Assists', value: productivityStats.aiAssists.toString(), color: 'text-teal-500', bg: 'bg-teal-500/10' },
+            { icon: Plus, label: 'Tasks Created', value: productivityStats.tasksCreated.toString(), color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+            { icon: Sparkles, label: 'AI Documents', value: productivityStats.aiDocumentsGenerated.toString(), color: 'text-teal-500', bg: 'bg-teal-500/10' },
+            { icon: Mic, label: 'Voice Notes', value: productivityStats.voiceNotesRecorded.toString(), color: 'text-blue-500', bg: 'bg-blue-500/10' },
+            { icon: FolderUp, label: 'Files Uploaded', value: productivityStats.workFilesUploaded.toString(), color: 'text-purple-500', bg: 'bg-purple-500/10' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -247,12 +350,20 @@ export default function ProPage() {
               </div>
               
               <p className="saydo-body text-white text-sm leading-relaxed mb-4">
-                {aiSummary.text}
-                {aiSummary.hasUpcoming && upcomingReminder && (
-                  <span className="block mt-2 text-white/80">
-                    {upcomingReminder.priority === 'urgent' && '⚠️ '}
-                    Next: {upcomingReminder.title}
+                {aiSummary.isLoading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="animate-pulse">Generating summary...</span>
                   </span>
+                ) : (
+                  <>
+                    {aiSummary.text}
+                    {aiSummary.hasUpcoming && upcomingReminder && (
+                      <span className="block mt-2 text-white/80">
+                        {upcomingReminder.priority === 'urgent' && '⚠️ '}
+                        Next: {upcomingReminder.title}
+                      </span>
+                    )}
+                  </>
                 )}
               </p>
               

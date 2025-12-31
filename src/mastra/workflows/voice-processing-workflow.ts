@@ -7,6 +7,7 @@ import { createHealthNoteTool } from "../tools/health-tool";
 import { getUserContext, getUserTimezone, type UserContext } from "../tools/user-profile-tool";
 import { createVoiceAgent, type ExtractedItems } from "../agents/voice-agent";
 import { cleanTranscription } from "../agents/transcription-agent";
+import { findMatchingFileTool, extractFileContentTool } from "../tools/file-vault-tool";
 
 /**
  * Input schema for voice processing workflow
@@ -168,7 +169,207 @@ const cleanTranscriptionStep = createStep({
 });
 
 /**
- * Step 3: Extract items from transcription using voice agent
+ * Step 3: Detect and extract files referenced in transcription
+ */
+const detectAndExtractFilesStep = createStep({
+  id: "detect-and-extract-files",
+  description: "Detect file references in transcription and extract file content",
+  inputSchema: z.object({
+    success: z.boolean(),
+    rawText: z.string().optional(),
+    cleanedText: z.string().optional(),
+    language: z.string().optional(),
+    duration: z.number().optional(),
+    error: z.string().optional(),
+    userId: z.string(),
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    rawText: z.string().optional(),
+    cleanedText: z.string().optional(),
+    language: z.string().optional(),
+    duration: z.number().optional(),
+    error: z.string().optional(),
+    userId: z.string(),
+    sourceRecordingId: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.object({
+      fileId: z.string(),
+      fileName: z.string(),
+      fileType: z.string(),
+      extractedContent: z.string(),
+      customName: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+    })).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    if (!inputData.success || !inputData.cleanedText) {
+      return {
+        ...inputData,
+        extractedFileContent: [],
+      };
+    }
+
+    try {
+      const transcription = inputData.cleanedText.toLowerCase();
+      const extractedFileContent: Array<{
+        fileId: string;
+        fileName: string;
+        fileType: string;
+        extractedContent: string;
+        customName?: string | null;
+        description?: string | null;
+      }> = [];
+
+      // File reference patterns for multiple languages
+      const fileReferencePatterns = [
+        // French patterns
+        /l['']image\s+([a-z0-9_-]+)/i,
+        /l['']image\s+que\s+j['']ai\s+envoyée/i,
+        /l['']image\s+que\s+j['']ai\s+envoyé/i,
+        /l['']image\s+([a-z0-9_-]+)\s+que\s+j['']ai\s+envoyée/i,
+        /l['']image\s+([a-z0-9_-]+)\s+que\s+j['']ai\s+envoyé/i,
+        /le\s+fichier\s+([a-z0-9_-]+)/i,
+        /le\s+document\s+([a-z0-9_-]+)/i,
+        /le\s+rapport\s+([a-z0-9_-]+)/i,
+        /la\s+photo\s+([a-z0-9_-]+)/i,
+        // English patterns
+        /the\s+image\s+([a-z0-9_-]+)/i,
+        /the\s+image\s+i\s+uploaded/i,
+        /the\s+image\s+i\s+sent/i,
+        /the\s+file\s+([a-z0-9_-]+)/i,
+        /the\s+file\s+i\s+uploaded/i,
+        /the\s+document\s+([a-z0-9_-]+)/i,
+        /the\s+report\s+([a-z0-9_-]+)/i,
+        /the\s+photo\s+([a-z0-9_-]+)/i,
+        // Spanish patterns
+        /la\s+imagen\s+([a-z0-9_-]+)/i,
+        /la\s+imagen\s+que\s+subí/i,
+        /la\s+imagen\s+que\s+envié/i,
+        /el\s+archivo\s+([a-z0-9_-]+)/i,
+        /el\s+documento\s+([a-z0-9_-]+)/i,
+        /el\s+informe\s+([a-z0-9_-]+)/i,
+        /la\s+foto\s+([a-z0-9_-]+)/i,
+        // Generic patterns (catch-all)
+        /(?:image|file|document|report|photo|fichier|documento|imagen)\s+([a-z0-9_-]+)/i,
+      ];
+
+      // Detect file references
+      const detectedReferences: Array<{ query: string; name?: string }> = [];
+      
+      for (const pattern of fileReferencePatterns) {
+        const matches = transcription.matchAll(new RegExp(pattern.source, 'gi'));
+        for (const match of matches) {
+          if (match[1]) {
+            // Pattern with capture group (file name)
+            detectedReferences.push({ query: match[1], name: match[1] });
+          } else {
+            // Pattern without capture group (generic reference)
+            const fullMatch = match[0];
+            detectedReferences.push({ query: fullMatch });
+          }
+        }
+      }
+
+      // Remove duplicates
+      const uniqueReferences = Array.from(
+        new Map(detectedReferences.map(ref => [ref.query, ref])).values()
+      );
+
+      console.log('[detectAndExtractFilesStep] Detected file references', {
+        userId: inputData.userId,
+        referencesCount: uniqueReferences.length,
+        references: uniqueReferences.map(r => r.query),
+      });
+
+      // For each detected reference, try to find and extract the file
+      for (const reference of uniqueReferences) {
+        try {
+          // Try to find matching file
+          const findResult = await findMatchingFileTool.execute({
+            userId: inputData.userId,
+            query: reference.query,
+          });
+
+          if (findResult.success && findResult.file && findResult.confidence > 0.5) {
+            console.log('[detectAndExtractFilesStep] File found', {
+              fileName: findResult.file.fileName,
+              fileType: findResult.file.fileType,
+              confidence: findResult.confidence,
+            });
+
+            // Extract file content
+            const extractResult = await extractFileContentTool.execute({
+              fileId: findResult.file.id,
+              fileUrl: findResult.file.fileUrl,
+              fileType: findResult.file.fileType as "pdf" | "image" | "document" | "spreadsheet" | "presentation" | "other",
+              extractionMode: "full",
+            });
+
+            if (extractResult.success && extractResult.content) {
+              extractedFileContent.push({
+                fileId: findResult.file.id,
+                fileName: findResult.file.fileName,
+                fileType: findResult.file.fileType,
+                extractedContent: extractResult.content,
+                customName: findResult.file.customName,
+                description: findResult.file.description,
+              });
+
+              console.log('[detectAndExtractFilesStep] File content extracted', {
+                fileName: findResult.file.fileName,
+                contentLength: extractResult.content.length,
+              });
+            } else {
+              console.warn('[detectAndExtractFilesStep] Failed to extract file content', {
+                fileName: findResult.file.fileName,
+                error: extractResult.error,
+              });
+            }
+          } else {
+            console.log('[detectAndExtractFilesStep] File not found or low confidence', {
+              query: reference.query,
+              confidence: findResult.confidence,
+              error: findResult.error,
+            });
+          }
+        } catch (err) {
+          console.error('[detectAndExtractFilesStep] Error processing file reference', {
+            query: reference.query,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+          // Continue with next reference even if this one fails
+        }
+      }
+
+      console.log('[detectAndExtractFilesStep] File detection complete', {
+        userId: inputData.userId,
+        filesExtracted: extractedFileContent.length,
+      });
+
+      return {
+        ...inputData,
+        extractedFileContent,
+      };
+    } catch (err) {
+      console.error('[detectAndExtractFilesStep] Exception during file detection', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        userId: inputData.userId,
+      });
+      // Don't fail the workflow if file detection fails - continue with empty array
+      return {
+        ...inputData,
+        extractedFileContent: [],
+      };
+    }
+  },
+});
+
+/**
+ * Step 4: Extract items from transcription using voice agent
  */
 const extractItemsStep = createStep({
   id: "extract-items",
@@ -183,6 +384,14 @@ const extractItemsStep = createStep({
     userId: z.string(),
     sourceRecordingId: z.string().optional(),
     skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.object({
+      fileId: z.string(),
+      fileName: z.string(),
+      fileType: z.string(),
+      extractedContent: z.string(),
+      customName: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+    })).optional(),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -193,6 +402,7 @@ const extractItemsStep = createStep({
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
     skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.any()).optional(), // Pass through for potential future use
   }),
   execute: async ({ inputData }) => {
     if (!inputData.success || !inputData.cleanedText) {
@@ -312,6 +522,23 @@ const extractItemsStep = createStep({
       const in30MinISO = in30Min.toISOString();
       const in10MinISO = in10Min.toISOString();
 
+      // Build file content context if files were extracted
+      let fileContentContext = "";
+      if (inputData.extractedFileContent && inputData.extractedFileContent.length > 0) {
+        fileContentContext = "\n\n## EXTRACTED FILE CONTENT - AVAILABLE FOR ANALYSIS\n";
+        fileContentContext += "The following file content has been extracted and is available for analysis:\n\n";
+        
+        for (const file of inputData.extractedFileContent) {
+          fileContentContext += `### File: ${file.customName || file.fileName} (${file.fileType})\n`;
+          if (file.description) {
+            fileContentContext += `Description: ${file.description}\n`;
+          }
+          fileContentContext += `Content:\n${file.extractedContent.substring(0, 2000)}${file.extractedContent.length > 2000 ? '...' : ''}\n\n`;
+        }
+        
+        fileContentContext += "**IMPORTANT**: If the user requests content generation (summary, analysis, description) based on these files, you MUST create a content prediction with confidence 0.9+.\n";
+      }
+
       const prompt = `Please analyze this voice transcription and extract all actionable items. 
 
 ## CURRENT DATE AND TIME - CRITICAL FOR DATE PARSING
@@ -343,6 +570,26 @@ const extractItemsStep = createStep({
   - "appointment at 9:30 AM": dueTime should be "09:30"
   - "meeting at 14:00": dueTime should be "14:00"
   - "football match tomorrow at 2pm": dueDate should be tomorrow's date (${tomorrowDate}), dueTime should be "14:00"
+
+${fileContentContext}
+## FILE-BASED CONTENT GENERATION - CRITICAL
+
+**When file content is provided above AND the user requests content generation (summary, analysis, description, etc.), you MUST:**
+
+1. **ALWAYS create a content prediction** with confidence 0.9+ (not a task!)
+2. **File-based content requests are NOT tasks** - they are content generation requests
+3. **Examples of file-based content requests:**
+   - French: "résumé de l'image", "décris cette image", "analyse ce fichier", "fais-moi un résumé de l'image GIGU"
+   - English: "summarize the image", "describe this image", "analyze this file", "make a summary of the image I uploaded"
+   - Spanish: "resumen de la imagen", "describe esta imagen", "analiza este archivo"
+
+4. **Content prediction format:**
+   - contentType: "summary" (for résumé), "description" (for décris/describe), "analysis" (for analyse/analyze), etc.
+   - description: Include the file name and what content to generate (e.g., "Summary of image GIGU")
+   - confidence: 0.9+ (always high for explicit file-based requests)
+   - Include file context in the description
+
+5. **DO NOT create a task** for file-based content requests - create a content prediction instead
 
 IMPORTANT: All extracted items (task titles, reminders, notes, tags, and especially the summary) MUST be in ${languageName} (${userContext.language}). Do NOT translate to English.
 
@@ -492,6 +739,7 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
         skipSaveItems: inputData.skipSaveItems,
+        extractedFileContent: inputData.extractedFileContent, // Pass through
       };
     } catch (err) {
       console.error('[extractItemsStep] Exception during extraction', {
@@ -509,6 +757,7 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
         skipSaveItems: inputData.skipSaveItems,
+        extractedFileContent: inputData.extractedFileContent, // Pass through even on error
       };
     }
   },
@@ -529,6 +778,7 @@ const saveItemsStep = createStep({
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
     skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.any()).optional(), // Pass through, not used in this step
   }),
   outputSchema: VoiceProcessingOutputSchema,
   execute: async ({ inputData }) => {
@@ -969,98 +1219,6 @@ const saveItemsStep = createStep({
  * directly by the voice agent in extractItemsStep via contentPredictions field.
  * This eliminates duplicate processing and improves reliability.
  */
-// const smartAnalysisStep = createStep({
-  id: "smart-analysis",
-  description: "Analyze transcription for content generation opportunities",
-  inputSchema: VoiceProcessingOutputSchema,
-  outputSchema: z.object({
-    success: z.boolean(),
-    transcription: z.string().optional(),
-    language: z.string().optional(),
-    extractedItems: z.any().optional(),
-    userId: z.string().optional(),
-    sourceRecordingId: z.string().optional(),
-    error: z.string().optional(),
-    // Smart analysis results
-    smartAnalysis: z.object({
-      extractionNeeded: z.boolean(),
-      contentPredictions: z.array(z.object({
-        contentType: z.string(),
-        description: z.string(),
-        confidence: z.number(),
-        reasoning: z.string(),
-        suggestedTitle: z.string().optional(),
-        targetPlatform: z.string().optional(),
-        priority: z.enum(["high", "medium", "low"]),
-      })),
-      conversationInsights: z.object({
-        mainTopics: z.array(z.string()),
-        entities: z.array(z.string()),
-        sentiment: z.string(),
-        urgency: z.string(),
-      }),
-      detectedLanguage: z.string().optional(),
-      explicitLanguageRequest: z.string().optional(),
-      analysisNotes: z.string(),
-    }).optional(),
-  }),
-  execute: async ({ inputData }) => {
-    // Skip if previous step failed
-    if (!inputData.success || !inputData.transcription) {
-      return {
-        ...inputData,
-        smartAnalysis: undefined,
-      };
-    }
-
-    try {
-      // Dynamically import to avoid circular dependencies
-      const { analyzeTranscription } = await import("../agents/smart-agent");
-      const { getFullVoiceContext } = await import("@/lib/mastra/voice-context");
-      const { getFullUserContext } = await import("../tools/user-profile-tool");
-
-      // Get user context and voice history
-      const userId = inputData.userId;
-      if (!userId) {
-        console.warn("[smartAnalysisStep] No userId, skipping smart analysis");
-        return { ...inputData, smartAnalysis: undefined };
-      }
-
-      const [userContext, voiceContext] = await Promise.all([
-        getFullUserContext(userId),
-        getFullVoiceContext(userId),
-      ]);
-
-      // Run smart analysis
-      const analysis = await analyzeTranscription(
-        inputData.transcription,
-        userContext,
-        voiceContext.combinedContext
-      );
-
-      console.log("[smartAnalysisStep] Analysis complete", {
-        userId,
-        predictionsCount: analysis.contentPredictions.length,
-        mainTopics: analysis.conversationInsights.mainTopics,
-      });
-
-      return {
-        ...inputData,
-        userId,
-        smartAnalysis: analysis,
-      };
-    } catch (err) {
-      console.error("[smartAnalysisStep] Error in smart analysis", {
-        error: err instanceof Error ? err.message : "Unknown error",
-      });
-      // Continue without smart analysis on error
-      return {
-        ...inputData,
-        smartAnalysis: undefined,
-      };
-    }
-  },
-}); // End of commented-out smartAnalysisStep - no longer used, content predictions come from voice agent
 
 /**
  * Step 6: Generate predicted content
@@ -1076,6 +1234,7 @@ const generateContentStep = createStep({
     userId: z.string().optional(),
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
+    extractedFileContent: z.array(z.any()).optional(), // Pass through, not used in this step
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -1216,6 +1375,7 @@ const notifyContentStep = createStep({
     sourceRecordingId: z.string().optional(),
     error: z.string().optional(),
     generatedContent: z.array(z.any()).optional(),
+    extractedFileContent: z.array(z.any()).optional(), // Pass through, not used in this step
   }),
   outputSchema: VoiceProcessingOutputSchema.extend({
     generatedContent: z.array(z.object({
@@ -1277,9 +1437,9 @@ const notifyContentStep = createStep({
  * Pipeline:
  * 1. Transcribe audio using OpenAI Whisper
  * 2. Clean and correct transcription using AI
- * 3. Extract tasks, reminders, and notes using voice agent
- * 4. Save extracted items to database
- * 5. Smart analysis (predict content needs from casual conversation)
+ * 3. Detect file references and extract file content (proactive file detection)
+ * 4. Extract tasks, reminders, and notes using voice agent (includes content predictions with file context)
+ * 5. Save extracted items to database
  * 6. Generate predicted content
  * 7. Send notifications for generated content
  */
@@ -1299,6 +1459,7 @@ export const voiceProcessingWorkflow = createWorkflow({
 })
   .then(transcribeStep)
   .then(cleanTranscriptionStep)
+  .then(detectAndExtractFilesStep)
   .then(extractItemsStep)
   .then(saveItemsStep)
   .then(generateContentStep)

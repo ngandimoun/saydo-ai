@@ -11,3 +11,5 @@ CREATE INDEX IF NOT EXISTS idx_work_files_custom_name ON work_files(custom_name)
 -- Add index on description for searchability
 CREATE INDEX IF NOT EXISTS idx_work_files_description ON work_files(description) WHERE description IS NOT NULL;
 
+
+

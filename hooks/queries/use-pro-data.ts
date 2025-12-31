@@ -197,24 +197,22 @@ async function fetchEndOfDaySummary(): Promise<EndOfDaySummary | null> {
   }
 }
 
-// Productivity Stats (enhanced with AI document count)
+// Productivity Stats - New metrics that reflect actual work activity
 async function fetchProductivityStats(): Promise<{
-  tasksCompleted: number
-  focusTime: string
-  meetings: number
-  aiAssists: number
+  tasksCreated: number
   aiDocumentsGenerated: number
+  voiceNotesRecorded: number
+  workFilesUploaded: number
 }> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
     return {
-      tasksCompleted: 0,
-      focusTime: '0h 0m',
-      meetings: 0,
-      aiAssists: 0,
+      tasksCreated: 0,
       aiDocumentsGenerated: 0,
+      voiceNotesRecorded: 0,
+      workFilesUploaded: 0,
     }
   }
 
@@ -224,24 +222,30 @@ async function fetchProductivityStats(): Promise<{
   tomorrow.setDate(tomorrow.getDate() + 1)
 
   // Parallel fetch for performance
-  const [tasksResult, voiceResult, aiDocsResult] = await Promise.all([
-    // Count completed tasks today
+  const [tasksResult, voiceResult, workFilesResult, aiDocsResult] = await Promise.all([
+    // Count tasks created today
     supabase
       .from('tasks')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('status', 'completed')
-      .gte('completed_at', today.toISOString())
-      .lt('completed_at', tomorrow.toISOString()),
+      .gte('created_at', today.toISOString())
+      .lt('created_at', tomorrow.toISOString()),
     
-    // Count voice recordings today (AI assists)
+    // Count voice recordings created today (not just completed)
     supabase
       .from('voice_recordings')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('status', 'completed')
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString()),
+    
+    // Count work files uploaded today
+    supabase
+      .from('work_files')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('uploaded_at', today.toISOString())
+      .lt('uploaded_at', tomorrow.toISOString()),
     
     // Count AI documents generated today
     supabase
@@ -254,10 +258,9 @@ async function fetchProductivityStats(): Promise<{
   ])
 
   return {
-    tasksCompleted: tasksResult.count || 0,
-    focusTime: '0h 0m', // Would need time tracking to be real
-    meetings: 0, // Would need calendar integration
-    aiAssists: voiceResult.count || 0,
+    tasksCreated: tasksResult.count || 0,
+    voiceNotesRecorded: voiceResult.count || 0,
+    workFilesUploaded: workFilesResult.count || 0,
     aiDocumentsGenerated: aiDocsResult.count || 0,
   }
 }
@@ -565,6 +568,97 @@ export function useNotificationsRealtime() {
       if (channel) {
         channel.unsubscribe()
       }
+    }
+  }, [queryClient])
+
+  return isSubscribed
+}
+
+/**
+ * Hook for realtime productivity stats updates
+ * Automatically invalidates productivity-stats query when tasks, voice_recordings, or reminders change
+ */
+export function useProductivityStatsRealtime() {
+  const queryClient = useQueryClient()
+  const [isSubscribed, setIsSubscribed] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    let channels: Array<ReturnType<typeof supabase.channel>> = []
+
+    const setupSubscriptions = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Subscribe to tasks table changes
+      const tasksChannel = supabase
+        .channel('productivity-stats-tasks')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tasks',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('[useProductivityStatsRealtime] Task changed:', payload.eventType)
+            queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productivity-stats'] })
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setIsSubscribed(true)
+          }
+        })
+
+      // Subscribe to voice_recordings table changes
+      const voiceChannel = supabase
+        .channel('productivity-stats-voice')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'voice_recordings',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('[useProductivityStatsRealtime] Voice recording changed:', payload.eventType)
+            queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productivity-stats'] })
+          }
+        )
+        .subscribe()
+
+      // Subscribe to work_files table changes
+      const workFilesChannel = supabase
+        .channel('productivity-stats-work-files')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'work_files',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('[useProductivityStatsRealtime] Work file changed:', payload.eventType)
+            queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, 'productivity-stats'] })
+          }
+        )
+        .subscribe()
+
+      channels = [tasksChannel, voiceChannel, workFilesChannel]
+    }
+
+    setupSubscriptions()
+
+    return () => {
+      channels.forEach(channel => {
+        if (channel) {
+          channel.unsubscribe()
+        }
+      })
     }
   }, [queryClient])
 

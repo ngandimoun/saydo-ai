@@ -4,6 +4,8 @@ import { useState, useRef } from "react"
 import { Camera, Image, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { CameraScannerModal } from "./camera-scanner-modal"
+import { isCameraSupported } from "@/lib/camera-utils"
 
 /**
  * Food Scanner Component
@@ -43,6 +45,7 @@ export function FoodScanner({
   className 
 }: FoodScannerProps) {
   const [isUploading, setIsUploading] = useState(false)
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (file: File) => {
@@ -141,6 +144,19 @@ export function FoodScanner({
   }
 
   const handleClick = () => {
+    // Try to open camera modal if supported, otherwise fallback to file input
+    if (isCameraSupported()) {
+      setIsCameraModalOpen(true)
+    } else {
+      fileInputRef.current?.click()
+    }
+  }
+
+  const handleCameraCapture = async (file: File) => {
+    await handleFileSelect(file)
+  }
+
+  const handleGallerySelect = () => {
     fileInputRef.current?.click()
   }
 
@@ -155,6 +171,12 @@ export function FoodScanner({
           capture="environment"
           onChange={handleFileChange}
           className="hidden"
+        />
+        <CameraScannerModal
+          isOpen={isCameraModalOpen}
+          onClose={() => setIsCameraModalOpen(false)}
+          onCapture={handleCameraCapture}
+          onGallerySelect={handleGallerySelect}
         />
         <button
           onClick={handleClick}
@@ -193,6 +215,12 @@ export function FoodScanner({
           onChange={handleFileChange}
           className="hidden"
         />
+        <CameraScannerModal
+          isOpen={isCameraModalOpen}
+          onClose={() => setIsCameraModalOpen(false)}
+          onCapture={handleCameraCapture}
+          onGallerySelect={handleGallerySelect}
+        />
         <Button
           onClick={handleClick}
           disabled={isUploading}
@@ -225,6 +253,12 @@ export function FoodScanner({
         capture="environment"
         onChange={handleFileChange}
         className="hidden"
+      />
+      <CameraScannerModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={handleCameraCapture}
+        onGallerySelect={handleGallerySelect}
       />
       <button
         onClick={handleClick}

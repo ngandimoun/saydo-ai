@@ -279,6 +279,35 @@ export function WorkFileUploadModal({ isOpen, onClose, onUploadComplete }: WorkF
           throw new Error(dbError.message)
         }
 
+        // Generate embedding for semantic search
+        if (dbData?.id) {
+          try {
+            const searchableText = [
+              sf.file.name,
+              sf.customName?.trim(),
+              sf.description?.trim(),
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            // Call embedding API (fire and forget - don't block upload)
+            fetch("/api/files/generate-embedding", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fileId: dbData.id,
+                searchableText,
+              }),
+            }).catch((err) => {
+              console.warn("[WorkFileUpload] Failed to generate embedding:", err);
+              // Don't fail the upload if embedding generation fails
+            });
+          } catch (embeddingError) {
+            console.warn("[WorkFileUpload] Embedding generation error:", embeddingError);
+            // Don't fail the upload if embedding generation fails
+          }
+        }
+
         // Update state to success
         setSelectedFiles(prev => prev.map((f, idx) => 
           idx === i ? { ...f, state: 'success' } : f

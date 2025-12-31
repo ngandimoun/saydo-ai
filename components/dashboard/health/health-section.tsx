@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils"
  * Health Section
  * 
  * The Health Hub - central place for:
- * - Uploading clinical documents
+ * - Uploading health-related items (food, drinks, supplements, products, clinical documents)
+ * - Checking health compatibility of uploaded items
  * - Viewing AI-generated insights
  * - Personalized recommendations (food, exercise, supplements)
  * 
@@ -29,9 +30,10 @@ import { cn } from "@/lib/utils"
  * - Store user's health preferences
  * 
  * TODO (AI Integration):
+ * - Image recognition for food/drinks/supplements/products
  * - Process uploaded PDFs with OCR
- * - Extract biomarkers and values
- * - Generate personalized insights
+ * - Extract biomarkers, ingredients, and nutritional values
+ * - Generate personalized insights and compatibility analysis
  * - Cross-reference with allergies and preferences
  */
 
@@ -176,17 +178,17 @@ export function HealthSection({ className }: HealthSectionProps) {
             <Heart size={28} className="text-rose-500" />
           </div>
           <h3 className="font-medium text-foreground mb-1">
-            Upload your first results
+            Check what's good for your health
           </h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Saydo will analyze and give personalized insights
+            Upload food, drinks, supplements, products, or clinical results. Saydo will analyze if it's good for you.
           </p>
           <Button
             onClick={() => setIsUploadOpen(true)}
             className="rounded-full gap-2"
           >
             <Upload size={16} />
-            Upload Clinical Results
+            Upload for Analysis
           </Button>
         </motion.div>
       )}

@@ -244,3 +244,5 @@ export const patternLearningTools = {
   applyPatterns: applyPatternsTool,
 };
 
+
+

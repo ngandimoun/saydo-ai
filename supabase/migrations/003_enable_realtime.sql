@@ -9,7 +9,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE urgent_alerts;
 ALTER PUBLICATION supabase_realtime ADD TABLE proactive_interventions;
 ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
 ALTER PUBLICATION supabase_realtime ADD TABLE voice_recordings;
-ALTER PUBLICATION supabase_realtime ADD TABLE health_status;
+-- Note: health_status is added to Realtime in migration 013_health_engagement.sql
+-- after the table is created
 
 -- Note: Realtime requires the tables to have REPLICA IDENTITY set
 -- This is usually set automatically, but we ensure it here
@@ -17,6 +18,7 @@ ALTER TABLE urgent_alerts REPLICA IDENTITY FULL;
 ALTER TABLE proactive_interventions REPLICA IDENTITY FULL;
 ALTER TABLE tasks REPLICA IDENTITY FULL;
 ALTER TABLE voice_recordings REPLICA IDENTITY FULL;
-ALTER TABLE health_status REPLICA IDENTITY FULL;
+-- Note: health_status REPLICA IDENTITY is set in migration 013_health_engagement.sql
+
 
 

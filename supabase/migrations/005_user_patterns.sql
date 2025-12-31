@@ -51,3 +51,5 @@ COMMENT ON COLUMN user_patterns.frequency IS 'Number of times this pattern has b
 COMMENT ON COLUMN user_patterns.confidence_score IS 'Confidence score from 0-100 indicating pattern reliability';
 COMMENT ON COLUMN user_patterns.metadata IS 'Additional context about the pattern (e.g., time range, sample items)';
 
+
+

@@ -42,3 +42,5 @@ CREATE POLICY "Users can delete own work files"
   ON work_files FOR DELETE 
   USING (auth.uid() = user_id);
 
+
+

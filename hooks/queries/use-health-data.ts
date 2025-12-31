@@ -121,13 +121,14 @@ async function fetchInterventions(): Promise<ProactiveIntervention[]> {
     description: i.description,
     urgencyLevel: i.urgency_level as ProactiveIntervention['urgencyLevel'],
     category: i.category as ProactiveIntervention['category'],
-    context: i.context,
+    context: i.context_data || i.context,
     biologicalReason: i.biological_reason,
     actionItems: i.action_items || [],
     dismissible: i.dismissible,
     validUntil: i.valid_until ? new Date(i.valid_until) : undefined,
     createdAt: new Date(i.created_at),
     isDismissed: i.is_dismissed,
+    useCaseData: i.use_case_data,
   }))
 }
 
@@ -235,6 +236,44 @@ async function fetchHealthRecommendations(): Promise<HealthRecommendation[]> {
 }
 
 // Meal Plan
+// Day of week mapping
+const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+interface PlanDataMeal {
+  breakfast?: string
+  breakfast_alternatives?: string[]
+  breakfast_substitutions?: Record<string, string>
+  breakfast_why?: string
+  lunch?: string
+  lunch_alternatives?: string[]
+  lunch_substitutions?: Record<string, string>
+  lunch_why?: string
+  dinner?: string
+  dinner_alternatives?: string[]
+  dinner_substitutions?: Record<string, string>
+  dinner_why?: string
+  snack?: string
+  snack_alternatives?: string[]
+  snack_substitutions?: Record<string, string>
+  snack_why?: string
+}
+
+interface PlanData {
+  meal_plan?: Record<string, PlanDataMeal>
+  supplements?: { 
+    daily?: string[]
+    details?: Array<{
+      name: string
+      dosage: string
+      timing: string
+      brand?: string
+      reason?: string
+      alternatives?: string[]
+    }>
+  }
+  hydration?: string
+}
+
 async function fetchMealPlan(): Promise<MealPlan | null> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -247,6 +286,7 @@ async function fetchMealPlan(): Promise<MealPlan | null> {
     .from('meal_plans')
     .select('*')
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(1)
     .single()
@@ -255,13 +295,100 @@ async function fetchMealPlan(): Promise<MealPlan | null> {
     return null
   }
 
+  // Transform plan_data into structured days array
+  let days: MealPlanDay[] = []
+  const planData = mealPlanData.plan_data as PlanData | null
+  
+  if (planData?.meal_plan) {
+    const startDate = new Date(mealPlanData.start_date)
+    const supplementsList = planData.supplements?.daily || []
+    const supplementDetails = planData.supplements?.details || []
+    const hydration = planData.hydration
+    
+    days = dayOrder.map((dayName, index) => {
+      const dayMeals = planData.meal_plan?.[dayName] || {}
+      const date = new Date(startDate)
+      date.setDate(date.getDate() + index)
+      
+      return {
+        date,
+        breakfast: dayMeals.breakfast ? [{
+          id: `${dayName}-breakfast`,
+          name: dayMeals.breakfast,
+          nutritionalInfo: { calories: 400, protein: 15, carbs: 50, fats: 15 },
+          bloodGroupCompatible: true,
+          allergySafe: true,
+          alternatives: dayMeals.breakfast_alternatives,
+          substitutions: dayMeals.breakfast_substitutions,
+          reason: dayMeals.breakfast_why,
+        }] : [],
+        lunch: dayMeals.lunch ? [{
+          id: `${dayName}-lunch`,
+          name: dayMeals.lunch,
+          nutritionalInfo: { calories: 500, protein: 25, carbs: 60, fats: 20 },
+          bloodGroupCompatible: true,
+          allergySafe: true,
+          alternatives: dayMeals.lunch_alternatives,
+          substitutions: dayMeals.lunch_substitutions,
+          reason: dayMeals.lunch_why,
+        }] : [],
+        dinner: dayMeals.dinner ? [{
+          id: `${dayName}-dinner`,
+          name: dayMeals.dinner,
+          nutritionalInfo: { calories: 600, protein: 30, carbs: 70, fats: 25 },
+          bloodGroupCompatible: true,
+          allergySafe: true,
+          alternatives: dayMeals.dinner_alternatives,
+          substitutions: dayMeals.dinner_substitutions,
+          reason: dayMeals.dinner_why,
+        }] : [],
+        snacks: dayMeals.snack ? [{
+          id: `${dayName}-snack`,
+          name: dayMeals.snack,
+          nutritionalInfo: { calories: 150, protein: 5, carbs: 20, fats: 8 },
+          bloodGroupCompatible: true,
+          allergySafe: true,
+          alternatives: dayMeals.snack_alternatives,
+          substitutions: dayMeals.snack_substitutions,
+          reason: dayMeals.snack_why,
+        }] : [],
+        supplements: supplementDetails.length > 0 
+          ? supplementDetails.map((supp, i) => ({
+              id: `${dayName}-supplement-${i}`,
+              name: supp.name,
+              dosage: supp.dosage || 'As directed',
+              timing: supp.timing || 'morning',
+              brand: supp.brand,
+              reason: supp.reason,
+              alternatives: supp.alternatives,
+            }))
+          : supplementsList.map((name, i) => ({
+              id: `${dayName}-supplement-${i}`,
+              name,
+              dosage: 'As directed',
+              timing: 'morning',
+            })),
+        nutritionalTargets: {
+          calories: 2000,
+          protein: 75,
+          carbs: 250,
+          fats: 70,
+        },
+        hydration,
+      }
+    })
+  } else if (mealPlanData.days && Array.isArray(mealPlanData.days)) {
+    // Use existing days array if available
+    days = mealPlanData.days
+  }
+
   return {
     id: mealPlanData.id,
     userId: mealPlanData.user_id,
     type: mealPlanData.type,
     startDate: new Date(mealPlanData.start_date),
     endDate: new Date(mealPlanData.end_date),
-    days: mealPlanData.days || [],
+    days,
     basedOnLabs: mealPlanData.based_on_labs || [],
     basedOnInsights: mealPlanData.based_on_insights || [],
     createdAt: new Date(mealPlanData.created_at),
@@ -382,4 +509,5 @@ export function useInvalidateHealthData() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: QUERY_KEY })
 }
+
 

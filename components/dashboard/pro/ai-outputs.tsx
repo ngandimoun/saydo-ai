@@ -17,6 +17,7 @@ import {
   useArchiveAIDocument,
   useDeleteAIDocument 
 } from "@/hooks/queries/use-pro-data"
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +108,7 @@ export function AIOutputs({
   // Modal state
   const [selectedDoc, setSelectedDoc] = useState<AIDocument | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copiedVersion, setCopiedVersion] = useState<string | null>(null)
   
   // Mutations
   const archiveMutation = useArchiveAIDocument()
@@ -143,12 +145,193 @@ export function AIOutputs({
       .replace(/\b\w/g, c => c.toUpperCase())
   }
 
-  const handleCopy = async (content: string) => {
+  /**
+   * Parse alternative versions from content
+   * Extracts main content and alternative versions from markdown text
+   */
+  const parseAlternativeVersions = useCallback((content: string): {
+    mainContent: string
+    alternatives: Array<{ name: string; content: string }>
+  } => {
+    // Patterns for detecting alternative versions section (multiple languages)
+    const alternativesHeaderPatterns = [
+      /Versions alternatives\s*:/i,
+      /Alternative versions\s*:/i,
+      /Versiones alternativas\s*:/i,
+      /Versionen\s*:/i,
+      /Versões alternativas\s*:/i,
+    ]
+
+    // Find where alternatives section starts
+    let alternativesStartIndex = -1
+    let alternativesHeader = ''
+    
+    for (const pattern of alternativesHeaderPatterns) {
+      const match = content.match(pattern)
+      if (match) {
+        alternativesStartIndex = match.index || -1
+        alternativesHeader = match[0]
+        break
+      }
+    }
+
+    // If no alternatives section found, return entire content as main
+    if (alternativesStartIndex === -1) {
+      return {
+        mainContent: content,
+        alternatives: []
+      }
+    }
+
+    // Extract main content (everything before alternatives section)
+    const mainContent = content.substring(0, alternativesStartIndex).trim()
+
+    // Extract alternatives section
+    const alternativesSection = content.substring(alternativesStartIndex + alternativesHeader.length).trim()
+
+    // Parse alternative versions
+    const alternatives: Array<{ name: string; content: string }> = []
+
+    // Pattern 1: Numbered list items like "1. **Version X :**" followed by content
+    const numberedPattern = /^\d+\.\s*\*\*([^*]+)\*\*\s*:?\s*\n([\s\S]*?)(?=\n\d+\.\s*\*\*|$)/gm
+    let match
+    let lastIndex = 0
+
+    while ((match = numberedPattern.exec(alternativesSection)) !== null) {
+      const versionName = match[1].trim()
+      const versionContent = match[2].trim()
+      alternatives.push({ name: versionName, content: versionContent })
+      lastIndex = match.index + match[0].length
+    }
+
+    // Pattern 2: "**Version X :**" followed by content (if numbered pattern didn't match)
+    if (alternatives.length === 0) {
+      const boldPattern = /\*\*([^*]+)\*\*\s*:?\s*\n([\s\S]*?)(?=\n\*\*[^*]+\*\*\s*:|$)/g
+      while ((match = boldPattern.exec(alternativesSection)) !== null) {
+        const versionName = match[1].trim()
+        // Skip if it's the header itself
+        if (versionName.toLowerCase().includes('version') && versionName.toLowerCase().includes('alternative')) {
+          continue
+        }
+        const versionContent = match[2].trim()
+        if (versionContent.length > 0) {
+          alternatives.push({ name: versionName, content: versionContent })
+        }
+      }
+    }
+
+    // Clean up main content - remove trailing separators
+    const cleanedMain = mainContent.replace(/---\s*$/, '').trim()
+
+    return {
+      mainContent: cleanedMain,
+      alternatives
+    }
+  }, [])
+
+  /**
+   * Extract a meaningful title from content when the title is generic
+   */
+  const getDisplayTitle = useCallback((doc: AIDocument): string => {
+    // Check if title is generic
+    const genericPatterns = [
+      /^generated content$/i,
+      /^content$/i,
+      /^draft$/i,
+      /^generated$/i,
+      /^new (content|document|draft)$/i,
+    ]
+    
+    const isGeneric = genericPatterns.some(pattern => pattern.test(doc.title))
+    
+    // If title is already descriptive, use it
+    if (!isGeneric && doc.title.trim().length > 0) {
+      return doc.title
+    }
+
+    // Extract title from content
+    if (doc.content && doc.content.trim().length > 0) {
+      let extracted = doc.content.trim()
+      
+      // Remove common prefixes in multiple languages
+      const prefixPatterns = [
+        // French
+        /^voici un (tweet|post|message) sur[:\s]+/i,
+        /^voici un (tweet|post|message) à propos de[:\s]+/i,
+        /^génération de[:\s]+/i,
+        /^voici[:\s]+/i,
+        // English
+        /^here'?s a (tweet|post|message) (about|on)[:\s]+/i,
+        /^here'?s (a |an )?(tweet|post|message)[:\s]+/i,
+        /^generated (content|tweet|post)[:\s]+/i,
+        /^this is a (tweet|post|message) (about|on)[:\s]+/i,
+        // Spanish
+        /^aquí hay un (tweet|post|mensaje) sobre[:\s]+/i,
+        /^aquí está un (tweet|post|mensaje) sobre[:\s]+/i,
+        // Generic
+        /^---\s*/i, // Remove markdown separators
+        /^#+\s*/i, // Remove markdown headers
+      ]
+      
+      for (const pattern of prefixPatterns) {
+        extracted = extracted.replace(pattern, '')
+      }
+      
+      extracted = extracted.trim()
+      
+      // For tweets/posts, extract first sentence or first 60 chars
+      const isSocialPost = ['tweet', 'post', 'social_post', 'twitter'].some(
+        type => doc.documentType.toLowerCase().includes(type)
+      )
+      
+      if (isSocialPost) {
+        // Try to extract first sentence
+        const sentenceMatch = extracted.match(/^[^.!?]+[.!?]/)
+        if (sentenceMatch) {
+          extracted = sentenceMatch[0].trim()
+        } else {
+          // Fall back to first 60 chars
+          extracted = extracted.substring(0, 60).trim()
+        }
+      } else {
+        // For other content, extract first line or first 80 chars
+        const firstLine = extracted.split('\n')[0].trim()
+        extracted = firstLine.length > 0 ? firstLine : extracted.substring(0, 80).trim()
+      }
+      
+      // Clean up and truncate
+      extracted = extracted
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .replace(/^[-–—]\s*/, '') // Remove leading dashes
+        .trim()
+      
+      // Truncate to reasonable length
+      const maxLength = isSocialPost ? 60 : 80
+      if (extracted.length > maxLength) {
+        extracted = extracted.substring(0, maxLength).trim() + '...'
+      }
+      
+      // If we have a meaningful extracted title, use it
+      if (extracted.length > 10) {
+        return extracted
+      }
+    }
+    
+    // Fall back to formatted document type
+    return formatTypeLabel(doc.documentType)
+  }, [])
+
+  const handleCopy = async (content: string, versionId?: string) => {
     try {
       await navigator.clipboard.writeText(content)
       setCopied(true)
+      if (versionId) {
+        setCopiedVersion(versionId)
+        setTimeout(() => setCopiedVersion(null), 2000)
+      } else {
+        setTimeout(() => setCopied(false), 2000)
+      }
       toast.success("Copied to clipboard!")
-      setTimeout(() => setCopied(false), 2000)
     } catch {
       toast.error("Failed to copy")
     }
@@ -290,7 +473,7 @@ export function AIOutputs({
                   <div className="flex items-start gap-3">
                     {/* Icon */}
                     <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
+                      "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
                       colorClass.split(' ')[1]
                     )}>
                       {isGenerating ? (
@@ -303,9 +486,9 @@ export function AIOutputs({
                     {/* Content */}
                     <div className="flex-1 min-w-0 pr-8">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-medium text-sm">{doc.title}</h3>
+                        <h3 className="font-medium text-sm">{getDisplayTitle(doc)}</h3>
                         {doc.status === 'ready' && (
-                          <CheckCircle2 size={14} className="text-green-500 flex-shrink-0" />
+                          <CheckCircle2 size={14} className="text-green-500 shrink-0" />
                         )}
                       </div>
                       
@@ -465,7 +648,7 @@ export function AIOutputs({
               {/* Header */}
               <div className="flex items-start justify-between px-6 pb-4 border-b border-border">
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold text-lg">{selectedDoc.title}</h2>
+                  <h2 className="font-semibold text-lg">{getDisplayTitle(selectedDoc)}</h2>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                       {formatTypeLabel(selectedDoc.documentType)}
@@ -490,37 +673,165 @@ export function AIOutputs({
 
               {/* Content */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                    {selectedDoc.content}
-                  </pre>
-                </div>
+                {(() => {
+                  const parsed = parseAlternativeVersions(selectedDoc.content)
+                  const contentType = 
+                    selectedDoc.documentType.toLowerCase().includes('tweet') || 
+                    selectedDoc.documentType.toLowerCase().includes('post') ||
+                    selectedDoc.documentType.toLowerCase().includes('social')
+                      ? 'tweet'
+                      : selectedDoc.documentType.toLowerCase().includes('report')
+                      ? 'report'
+                      : selectedDoc.documentType.toLowerCase().includes('email')
+                      ? 'email'
+                      : 'general'
 
-                {/* Tags */}
-                {selectedDoc.tags && selectedDoc.tags.length > 0 && (
-                  <div className="flex items-center gap-2 mt-6 flex-wrap">
-                    {selectedDoc.tags.map((tag, i) => (
-                      <span
-                        key={i}
-                        className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                  return (
+                    <div className="space-y-6">
+                      {/* Main Content */}
+                      <div className="relative">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-semibold text-foreground">Main Content</h4>
+                          <button
+                            onClick={() => handleCopy(parsed.mainContent, 'main')}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-1.5 rounded-lg",
+                              "bg-muted hover:bg-muted/80 active:scale-95",
+                              "transition-all duration-200",
+                              "text-xs font-medium text-foreground",
+                              "touch-manipulation" // Mobile optimization
+                            )}
+                            aria-label="Copy main content"
+                          >
+                            {copiedVersion === 'main' ? (
+                              <>
+                                <Check size={14} className="text-green-500" />
+                                <span>Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <MarkdownRenderer 
+                          content={parsed.mainContent}
+                          contentType={contentType}
+                        />
+                      </div>
+
+                      {/* Alternative Versions */}
+                      {parsed.alternatives.length > 0 && (
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold text-foreground">Alternative Versions</h4>
+                          {parsed.alternatives.map((alt, index) => {
+                            const versionId = `alt-${index}`
+                            return (
+                              <div
+                                key={index}
+                                className="relative p-4 rounded-xl bg-muted/30 border border-border/50"
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <h5 className="text-xs font-semibold text-primary">
+                                    {alt.name}
+                                  </h5>
+                                  <button
+                                    onClick={() => handleCopy(alt.content, versionId)}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+                                      "bg-background hover:bg-muted active:scale-95",
+                                      "transition-all duration-200",
+                                      "text-xs font-medium text-foreground",
+                                      "touch-manipulation" // Mobile optimization
+                                    )}
+                                    aria-label={`Copy ${alt.name}`}
+                                  >
+                                    {copiedVersion === versionId ? (
+                                      <>
+                                        <Check size={12} className="text-green-500" />
+                                        <span>Copied</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={12} />
+                                        <span>Copy</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                                <MarkdownRenderer 
+                                  content={alt.content}
+                                  contentType={contentType}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Tags */}
+                      {selectedDoc.tags && selectedDoc.tags.length > 0 && (
+                        <div className="flex items-center gap-2 mt-6 flex-wrap">
+                          {selectedDoc.tags.map((tag, i) => (
+                            <span
+                              key={i}
+                              className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Action buttons - sticky at bottom */}
               <div className="p-4 border-t border-border bg-background flex items-center gap-3">
-                <Button
+                <motion.button
                   onClick={() => handleCopy(selectedDoc.content)}
-                  variant="outline"
-                  className="flex-1"
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 px-4 py-2",
+                    "rounded-md border border-input bg-background",
+                    "text-sm font-medium transition-colors",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                    copied && "border-green-500/50 bg-green-500/10"
+                  )}
                 >
-                  <Copy size={16} className="mr-2" />
-                  Copy
-                </Button>
+                  <AnimatePresence mode="wait">
+                    {copied ? (
+                      <motion.div
+                        key="copied"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex items-center gap-2"
+                      >
+                        <Check size={16} className="text-green-500" />
+                        <span>Copied</span>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="copy"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex items-center gap-2"
+                      >
+                        <Copy size={16} />
+                        <span>Copy</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
                 <Button
                   onClick={() => handleShare(selectedDoc)}
                   className="flex-1"

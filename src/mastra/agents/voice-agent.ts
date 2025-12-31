@@ -2,6 +2,16 @@ import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { type UserContext, getUserTimezone } from "../tools/user-profile-tool";
+import {
+  getWorkFilesTool,
+  findMatchingFileTool,
+  extractFileContentTool,
+  analyzeFileContentTool,
+} from "../tools/file-vault-tool";
+import {
+  getHealthContextTool,
+  getRecentHealthDocumentsTool,
+} from "../tools/health-context-tool";
 
 // Language code to language name mapping
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -396,6 +406,44 @@ Extract any health-related observations:
 Anything that's not a task, reminder, or health note but worth recording.
 - **General note content must be in ${languageName}**
 
+### File Reference Detection
+
+**CRITICAL: When file content is provided in the prompt (in the "EXTRACTED FILE CONTENT" section), file-based content requests MUST trigger content predictions, NOT tasks.**
+
+When the user mentions files in their voice note:
+- Detect references like "the report I uploaded", "my quarterly report", "the contract file", "the document I saved", "l'image GIGU", "l'image que j'ai envoyée"
+- **If file content is already extracted and provided in the prompt:**
+  - User requests content generation (summary, analysis, description) based on the file → **ALWAYS create a content prediction with confidence 0.9+**
+  - File-based content requests are **NOT tasks** - they are content generation requests
+  - Examples:
+    - French: "résumé de l'image GIGU" + file content provided → content prediction (summary, confidence 0.9)
+    - English: "summarize the image I uploaded" + file content provided → content prediction (summary, confidence 0.9)
+    - Spanish: "resumen de la imagen" + file content provided → content prediction (summary, confidence 0.9)
+- **If file content is NOT yet extracted:**
+  - Use findMatchingFile tool to locate the specific file the user is referring to
+  - Extract content if needed for the task (summaries, analysis, content generation)
+  - Include file context in contentPredictions when generating content based on files
+  - Link files to generated content via sourceFileIds
+
+**File-Based Content Request Patterns (MUST trigger content predictions):**
+- French: "résumé de l'image", "décris cette image", "analyse ce fichier", "fais-moi un résumé de l'image [name]"
+- English: "summarize the image", "describe this image", "analyze this file", "make a summary of the image [name]"
+- Spanish: "resumen de la imagen", "describe esta imagen", "analiza este archivo"
+
+**Content Prediction Format for File-Based Requests:**
+- contentType: "summary" (for résumé/summarize), "description" (for décris/describe), "analysis" (for analyse/analyze)
+- description: Include the file name and what content to generate (e.g., "Summary of image GIGU" or "Résumé de l'image GIGU")
+- confidence: 0.9+ (always high for explicit file-based requests)
+- Include file context in the description field
+
+**File Detection Patterns:**
+- "the [type] I uploaded" → Find file matching type
+- "my [description]" → Semantic search for matching file
+- "the file about [topic]" → Search by description/topic
+- Temporal references: "yesterday's report", "last week's presentation"
+- French: "l'image [name]", "l'image que j'ai envoyée", "le fichier [name]"
+- Spanish: "la imagen [name]", "el archivo [name]"
+
 ### Content Generation Detection
 
 **CRITICAL: Use profession context from user onboarding and Mastra memory**
@@ -576,7 +624,7 @@ export async function createVoiceAgent(
   // Get or create memory thread for user
   let threadId = memoryThreadId;
   if (!threadId) {
-    threadId = await getUserMemoryThreadId(userContext.userId);
+    threadId = (await getUserMemoryThreadId(userContext.userId)) ?? undefined;
     if (!threadId) {
       // Initialize memory if it doesn't exist
       threadId = await initializeOrUpdateUserMemory(userContext.userId);
@@ -594,6 +642,14 @@ export async function createVoiceAgent(
     memory: memory, // Attach memory - agent will have access to onboarding data from working memory
     tools: {
       outputExtractedItems: outputExtractedItemsTool,
+      // File Vault Tools
+      getWorkFiles: getWorkFilesTool,
+      findMatchingFile: findMatchingFileTool,
+      extractFileContent: extractFileContentTool,
+      analyzeFileContent: analyzeFileContentTool,
+      // Health Context Tools - for accessing uploaded health documents
+      getHealthContext: getHealthContextTool,
+      getRecentHealthDocuments: getRecentHealthDocumentsTool,
     },
   });
 }
@@ -605,10 +661,13 @@ export const voiceAgent = new Agent({
   id: "voice-agent",
   name: "Voice Processor",
   instructions: `You are a voice transcription analyzer. Extract tasks, reminders, health notes, and general notes from voice transcriptions.
-Use the output-extracted-items tool to return structured data.`,
+Use the output-extracted-items tool to return structured data.
+When health topics are mentioned, use getHealthContext to access the user's recent health uploads and biomarkers.`,
   model: "openai/gpt-4o-mini",
   tools: {
     outputExtractedItems: outputExtractedItemsTool,
+    getHealthContext: getHealthContextTool,
+    getRecentHealthDocuments: getRecentHealthDocumentsTool,
   },
 });
 
@@ -639,11 +698,11 @@ Use the output-extracted-items tool to return the structured extraction. Remembe
   // The agent should have called outputExtractedItems with the structured data
   const toolCalls = response.toolCalls || [];
   const extractionCall = toolCalls.find(
-    (call) => call.toolName === "output-extracted-items"
+    (call) => (call as any).toolName === "output-extracted-items"
   );
 
-  if (extractionCall && extractionCall.args) {
-    return extractionCall.args as ExtractedItems;
+  if (extractionCall && (extractionCall as any).args) {
+    return (extractionCall as any).args as ExtractedItems;
   }
 
   // Fallback if no tool call was made
@@ -653,6 +712,7 @@ Use the output-extracted-items tool to return the structured extraction. Remembe
     healthNotes: [],
     generalNotes: [],
     summary: response.text || "Unable to extract items",
+    contentPredictions: [],
   };
 }
 

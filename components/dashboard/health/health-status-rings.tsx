@@ -273,10 +273,11 @@ function RingDisplay({ value, type, icon, label, delay, trend }: RingDisplayProp
 }
 
 export function HealthStatusRings({ healthStatus, showTrends = true, className }: HealthStatusRingsProps) {
-  // Mock trends - TODO: Calculate from historical data
-  const trends = {
-    energy: 'up' as const,
-    stress: 'down' as const,
+  // Use trends from healthStatus if available (from smart health status hook)
+  // Otherwise fallback to stable trends
+  const trends = healthStatus.trends || {
+    energy: 'stable' as const,
+    stress: 'stable' as const,
     recovery: 'stable' as const,
   }
 

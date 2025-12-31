@@ -153,6 +153,7 @@ export function VoiceFab({
         whileTap={{ scale: 0.95 }}
         onClick={onClick}
         transition={springs.bouncy}
+        suppressHydrationWarning
         className={cn(
           "relative w-16 h-16 rounded-full",
           "flex items-center justify-center",
