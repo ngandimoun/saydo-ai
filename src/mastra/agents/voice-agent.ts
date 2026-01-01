@@ -290,6 +290,49 @@ The user speaks in ${languageName} and their transcription will be in that langu
 ## LEARNED PATTERNS (Use these to provide smart defaults)
 ${await getPatternContext(context.userId)}
 
+## CLASSIFICATION PRIORITY HIERARCHY - CRITICAL
+
+**RULE: Content generation requests ALWAYS take precedence over task/reminder classification.**
+
+When the user says ANY of these generation verbs followed by a content type, you MUST create a **contentPrediction** (NOT a task, NOT a reminder, NOT a note):
+
+**Generation Verbs (Multi-Language) - If you detect these, create contentPrediction:**
+- French: "génère-moi", "génères", "générer", "je veux que tu génères", "je veux que tu me génères", "crée-moi", "créer", "écris-moi", "écrire", "fais-moi", "rédige-moi", "rédiger", "imagine-moi", "imagines", "imaginer", "m'imagines", "je veux que tu m'imagines"
+- English: "generate", "create", "write", "draft", "make me", "compose", "write me", "imagine", "imagine me"
+- Spanish: "genera", "crea", "escribe", "redacta", "hazme", "imagina", "imagíname"
+- German: "erstelle", "schreibe", "generiere", "verfasse", "stell dir vor"
+- Portuguese: "gera", "cria", "escreve", "redige", "imagina"
+- Arabic: "أنشئ", "اكتب", "اصنع", "تخيل"
+- Italian: "genera", "crea", "scrivi", "componi", "immagina"
+- Dutch: "genereer", "maak", "schrijf", "stel je voor"
+
+**Content Types to Detect:**
+- Social: "tweet", "post", "X post", "LinkedIn post", "publication", "thread"
+- Reports: "report", "rapport", "summary", "résumé", "informe"
+- Writing: "email", "message", "letter", "article", "blog"
+- Work: "document", "memo", "notes"
+
+**WRONG Classification (NEVER DO THIS):**
+- "génères un tweet" → task ❌ WRONG!
+- "génères un tweet" → reminder ❌ WRONG!
+- "create a LinkedIn post" → task ❌ WRONG!
+- "écris-moi un rapport" → reminder ❌ WRONG!
+
+**CORRECT Classification (ALWAYS DO THIS):**
+- "génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "génères-moi un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "je veux que tu génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "je veux que tu me génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "create a LinkedIn post" → contentPrediction { contentType: "linkedin_post", confidence: 0.95, targetPlatform: "linkedin" } ✓
+- "écris-moi un rapport" → contentPrediction { contentType: "report", confidence: 0.95 } ✓
+- "draft me a X post" → contentPrediction { contentType: "tweet", confidence: 0.95, targetPlatform: "x" } ✓
+- "fais-moi un post sur X" → contentPrediction { contentType: "tweet", confidence: 0.95, targetPlatform: "x" } ✓
+
+**Detection Priority Order:**
+1. FIRST check if it's a content generation request (generation verb + content type) → contentPrediction
+2. THEN check if it's a reminder (time-sensitive, remind me in X) → reminder
+3. LAST check if it's a task (actionable item) → task
+
 ## EXTRACTION RULES
 
 ### Tasks

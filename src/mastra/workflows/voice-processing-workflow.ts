@@ -571,6 +571,49 @@ const extractItemsStep = createStep({
   - "meeting at 14:00": dueTime should be "14:00"
   - "football match tomorrow at 2pm": dueDate should be tomorrow's date (${tomorrowDate}), dueTime should be "14:00"
 
+## CLASSIFICATION PRIORITY HIERARCHY - CRITICAL
+
+**RULE: Content generation requests ALWAYS take precedence over task/reminder classification.**
+
+When the user says ANY of these generation verbs followed by a content type, you MUST create a **contentPrediction** (NOT a task, NOT a reminder, NOT a note):
+
+**Generation Verbs (Multi-Language) - If you detect these, create contentPrediction:**
+- French: "génère-moi", "génères", "générer", "je veux que tu génères", "je veux que tu me génères", "crée-moi", "créer", "écris-moi", "écrire", "fais-moi", "rédige-moi", "rédiger", "imagine-moi", "imagines", "imaginer", "m'imagines", "je veux que tu m'imagines"
+- English: "generate", "create", "write", "draft", "make me", "compose", "write me", "imagine", "imagine me"
+- Spanish: "genera", "crea", "escribe", "redacta", "hazme", "imagina", "imagíname"
+- German: "erstelle", "schreibe", "generiere", "verfasse", "stell dir vor"
+- Portuguese: "gera", "cria", "escreve", "redige", "imagina"
+- Arabic: "أنشئ", "اكتب", "اصنع", "تخيل"
+- Italian: "genera", "crea", "scrivi", "componi", "immagina"
+- Dutch: "genereer", "maak", "schrijf", "stel je voor"
+
+**Content Types to Detect:**
+- Social: "tweet", "post", "X post", "LinkedIn post", "publication", "thread"
+- Reports: "report", "rapport", "summary", "résumé", "informe"
+- Writing: "email", "message", "letter", "article", "blog"
+- Work: "document", "memo", "notes"
+
+**WRONG Classification (NEVER DO THIS):**
+- "génères un tweet" → task ❌ WRONG!
+- "génères un tweet" → reminder ❌ WRONG!
+- "create a LinkedIn post" → task ❌ WRONG!
+- "écris-moi un rapport" → reminder ❌ WRONG!
+
+**CORRECT Classification (ALWAYS DO THIS):**
+- "génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "génères-moi un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "je veux que tu génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "je veux que tu me génères un tweet" → contentPrediction { contentType: "tweet", confidence: 0.95 } ✓
+- "create a LinkedIn post" → contentPrediction { contentType: "linkedin_post", confidence: 0.95, targetPlatform: "linkedin" } ✓
+- "écris-moi un rapport" → contentPrediction { contentType: "report", confidence: 0.95 } ✓
+- "draft me a X post" → contentPrediction { contentType: "tweet", confidence: 0.95, targetPlatform: "x" } ✓
+- "fais-moi un post sur X" → contentPrediction { contentType: "tweet", confidence: 0.95, targetPlatform: "x" } ✓
+
+**Detection Priority Order:**
+1. FIRST check if it's a content generation request (generation verb + content type) → contentPrediction
+2. THEN check if it's a reminder (time-sensitive, remind me in X) → reminder
+3. LAST check if it's a task (actionable item) → task
+
 ${fileContentContext}
 ## FILE-BASED CONTENT GENERATION - CRITICAL
 
@@ -609,6 +652,11 @@ The summary field must be clean and well-structured using markdown formatting:
 
 Transcription:
 "${inputData.cleanedText}"
+
+## CRITICAL REMINDER BEFORE EXTRACTING:
+1. **If the user says ANY generation verb (génères, génère-moi, je veux que tu génères, etc.) + content type (tweet, post, email, etc.), you MUST create a contentPrediction with confidence 0.95+**
+2. **Content generation requests are NEVER tasks or reminders - they are ALWAYS contentPredictions**
+3. **Example: "je veux que tu me génères un tweet" → MUST create contentPrediction { contentType: "tweet", confidence: 0.95 }**
 
 YOU MUST use the output-extracted-items tool to return the structured extraction. Do NOT just respond with text - you MUST call the tool. Remember: everything including tags must be in ${languageName}, all dates must be calculated from ${currentDate}, and the summary must be clean without boilerplate text.`;
 
@@ -692,6 +740,7 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
             remindersCount: parsedArgs.reminders?.length || 0,
             healthNotesCount: parsedArgs.healthNotes?.length || 0,
             generalNotesCount: parsedArgs.generalNotes?.length || 0,
+            contentPredictionsCount: parsedArgs.contentPredictions?.length || 0,
           });
         } catch (err) {
           console.error('[extractItemsStep] Failed to parse tool call args', {
@@ -759,6 +808,112 @@ YOU MUST use the output-extracted-items tool to return the structured extraction
         skipSaveItems: inputData.skipSaveItems,
         extractedFileContent: inputData.extractedFileContent, // Pass through even on error
       };
+    }
+  },
+});
+
+/**
+ * Step 3.5: Validate extraction - catch missed items
+ */
+const validateExtractionStep = createStep({
+  id: "validate-extraction",
+  description: "Re-analyze transcription to catch items the AI might have missed",
+  inputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.any()).optional(),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    transcription: z.string().optional(),
+    language: z.string().optional(),
+    extractedItems: z.any().optional(),
+    userId: z.string(),
+    sourceRecordingId: z.string().optional(),
+    error: z.string().optional(),
+    skipSaveItems: z.boolean().optional(),
+    extractedFileContent: z.array(z.any()).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    try {
+      // Skip validation if extraction failed
+      if (!inputData.success || !inputData.extractedItems || !inputData.transcription) {
+        return inputData;
+      }
+
+      const items = inputData.extractedItems as ExtractedItems;
+      
+      // Only validate if we have transcription and user context
+      if (!inputData.transcription || !inputData.userId) {
+        return inputData;
+      }
+
+      console.log('[validateExtractionStep] Starting validation', {
+        userId: inputData.userId,
+        transcriptionLength: inputData.transcription.length,
+        existingTasksCount: items.tasks?.length || 0,
+        existingRemindersCount: items.reminders?.length || 0,
+      });
+
+      // Dynamically import validation agent
+      const { validateExtraction } = await import("../agents/validation-agent");
+      const { getFullUserContext } = await import("../tools/user-profile-tool");
+      const { getUserTimezone } = await import("../tools/user-profile-tool");
+
+      // Get user context and timezone
+      const userContext = await getFullUserContext(inputData.userId);
+      const userTimezone = await getUserTimezone(inputData.userId);
+
+      // Run validation
+      const validationItems = await validateExtraction(
+        inputData.transcription,
+        items,
+        userContext,
+        userTimezone
+      );
+
+      console.log('[validateExtractionStep] Validation complete', {
+        newTasksCount: validationItems.tasks?.length || 0,
+        newRemindersCount: validationItems.reminders?.length || 0,
+      });
+
+      // Merge validation results with existing extraction
+      const mergedItems: ExtractedItems = {
+        tasks: [...(items.tasks || []), ...(validationItems.tasks || [])],
+        reminders: [...(items.reminders || []), ...(validationItems.reminders || [])],
+        healthNotes: [...(items.healthNotes || []), ...(validationItems.healthNotes || [])],
+        generalNotes: [...(items.generalNotes || []), ...(validationItems.generalNotes || [])],
+        summary: items.summary || validationItems.summary || "",
+        // Merge content predictions (deduplicate by contentType + description)
+        contentPredictions: [
+          ...(items.contentPredictions || []),
+          ...(validationItems.contentPredictions || []),
+        ].filter((cp, index, self) => 
+          index === self.findIndex((c) => 
+            c.contentType === cp.contentType && 
+            c.description === cp.description
+          )
+        ),
+      };
+
+      return {
+        ...inputData,
+        extractedItems: mergedItems,
+      };
+    } catch (err) {
+      console.error('[validateExtractionStep] Validation error', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        userId: inputData.userId,
+      });
+      // Don't fail the workflow if validation fails - just return original extraction
+      return inputData;
     }
   },
 });
@@ -912,9 +1067,29 @@ const saveItemsStep = createStep({
         tags: string[];
       }> = [];
       for (const reminder of items.reminders) {
+        // Compute reminderTime from dueDate + dueTime if reminderTime is not set
+        let computedReminderTime = reminder.reminderTime;
+        if (!computedReminderTime && reminder.dueDate) {
+          // Combine dueDate and dueTime into a proper ISO datetime
+          const dueDate = reminder.dueDate; // e.g., "2026-01-02"
+          const dueTime = reminder.dueTime || "09:00"; // Default to 9am if no time specified
+          computedReminderTime = `${dueDate}T${dueTime}:00`;
+          console.log('[saveItemsStep] Computed reminderTime from dueDate/dueTime', {
+            dueDate,
+            dueTime,
+            computedReminderTime,
+          });
+        }
+        
+        // Final fallback to now if still no time
+        const finalReminderTime = computedReminderTime || new Date().toISOString();
+
         console.log('[saveItemsStep] Saving reminder', {
           title: reminder.title,
           reminderTime: reminder.reminderTime,
+          dueDate: reminder.dueDate,
+          dueTime: reminder.dueTime,
+          computedReminderTime: finalReminderTime,
           priority: reminder.priority,
           type: reminder.type,
           tags: reminder.tags,
@@ -925,7 +1100,7 @@ const saveItemsStep = createStep({
           userId: inputData.userId,
           title: reminder.title,
           description: reminder.description,
-          reminderTime: reminder.reminderTime || new Date().toISOString(),
+          reminderTime: finalReminderTime,
           isRecurring: reminder.isRecurring,
           recurrencePattern: reminder.recurrencePattern,
           tags: reminder.tags || [],
@@ -1190,6 +1365,8 @@ const saveItemsStep = createStep({
             content: n.content,
           })),
           summary: formattedSummary,
+          // CRITICAL: Pass through contentPredictions for content generation step
+          contentPredictions: items.contentPredictions || [],
         },
         userId: inputData.userId,
         sourceRecordingId: inputData.sourceRecordingId,
@@ -1264,15 +1441,31 @@ const generateContentStep = createStep({
     // Get content predictions from voice agent extraction
     const predictions = extractedItems.contentPredictions || [];
     
-    // Filter to high-confidence predictions (>= 0.5)
+    // Log all predictions with their confidence for debugging
+    console.log("[generateContentStep] All predictions", {
+      count: predictions.length,
+      predictions: predictions.map((p: { contentType: string; description: string; confidence: number }) => ({
+        contentType: p.contentType,
+        description: p.description?.substring(0, 100),
+        confidence: p.confidence,
+      })),
+    });
+    
+    // Filter to predictions with ANY confidence > 0 (be more lenient)
+    // The AI should set 0.95 for explicit requests, but sometimes it doesn't
+    // We'll use >= 0.1 to catch most predictions and rely on the content being generated
     const highConfidencePredictions = predictions.filter(
-      (p: { confidence: number }) => p.confidence >= 0.5
+      (p: { confidence: number }) => p.confidence >= 0.1
     );
 
     if (highConfidencePredictions.length === 0) {
-      console.log("[generateContentStep] No high-confidence predictions, skipping");
+      console.log("[generateContentStep] No predictions with confidence >= 0.1, skipping");
       return { ...inputData, generatedContent: [] };
     }
+    
+    console.log("[generateContentStep] Processing predictions", {
+      highConfidenceCount: highConfidencePredictions.length,
+    });
 
     try {
       // Dynamically import
@@ -1461,6 +1654,7 @@ export const voiceProcessingWorkflow = createWorkflow({
   .then(cleanTranscriptionStep)
   .then(detectAndExtractFilesStep)
   .then(extractItemsStep)
+  .then(validateExtractionStep)
   .then(saveItemsStep)
   .then(generateContentStep)
   .then(notifyContentStep)
@@ -1490,5 +1684,178 @@ export async function processVoiceRecording(params: {
   });
 
   return result;
+}
+
+/**
+ * Helper function to process voice recording from existing transcription
+ * Reuses the robust workflow steps (file detection, extraction, saving, content generation)
+ * when transcription already exists (e.g., from user editing)
+ */
+export async function processVoiceRecordingFromTranscription(params: {
+  userId: string;
+  transcription: string;
+  sourceRecordingId?: string;
+  skipSaveItems?: boolean;
+  aiSummary?: string;
+  language?: string;
+}) {
+  try {
+    console.log('[processVoiceRecordingFromTranscription] Starting', {
+      userId: params.userId,
+      sourceRecordingId: params.sourceRecordingId,
+      transcriptionLength: params.transcription.length,
+      hasAiSummary: !!params.aiSummary,
+    });
+
+    // Step 1: Clean transcription
+    const cleanResult = await cleanTranscriptionStep.execute({
+      inputData: {
+        success: true,
+        text: params.transcription,
+        language: params.language,
+        userId: params.userId,
+        sourceRecordingId: params.sourceRecordingId,
+        skipSaveItems: params.skipSaveItems,
+      },
+    });
+
+    if (!cleanResult.success || !cleanResult.cleanedText) {
+      return {
+        status: "error" as const,
+        result: {
+          success: false,
+          error: cleanResult.error || "Failed to clean transcription",
+          transcription: params.transcription,
+        },
+      };
+    }
+
+    // Step 2: Detect and extract files
+    const fileDetectionResult = await detectAndExtractFilesStep.execute({
+      inputData: {
+        success: cleanResult.success,
+        rawText: cleanResult.rawText,
+        cleanedText: cleanResult.cleanedText,
+        language: cleanResult.language,
+        userId: cleanResult.userId,
+        sourceRecordingId: cleanResult.sourceRecordingId,
+        skipSaveItems: cleanResult.skipSaveItems,
+      },
+    });
+
+    // Step 3: Extract items using robust voice agent (with memory, file vault, etc.)
+    const extractionResult = await extractItemsStep.execute({
+      inputData: {
+        success: fileDetectionResult.success,
+        rawText: fileDetectionResult.rawText,
+        cleanedText: fileDetectionResult.cleanedText,
+        language: fileDetectionResult.language,
+        userId: fileDetectionResult.userId,
+        sourceRecordingId: fileDetectionResult.sourceRecordingId,
+        skipSaveItems: fileDetectionResult.skipSaveItems,
+        extractedFileContent: fileDetectionResult.extractedFileContent,
+      },
+    });
+
+    if (!extractionResult.success || !extractionResult.extractedItems) {
+      return {
+        status: "error" as const,
+        result: {
+          success: false,
+          error: extractionResult.error || "Failed to extract items",
+          transcription: extractionResult.transcription || params.transcription,
+        },
+      };
+    }
+
+    // Override summary if provided
+    if (params.aiSummary && extractionResult.extractedItems) {
+      extractionResult.extractedItems.summary = params.aiSummary;
+    }
+
+    // Step 3.5: Validate extraction - catch missed items
+    const validationResult = await validateExtractionStep.execute({
+      inputData: {
+        success: extractionResult.success,
+        transcription: extractionResult.transcription,
+        language: extractionResult.language,
+        extractedItems: extractionResult.extractedItems,
+        userId: extractionResult.userId,
+        sourceRecordingId: extractionResult.sourceRecordingId,
+        skipSaveItems: extractionResult.skipSaveItems,
+        extractedFileContent: extractionResult.extractedFileContent,
+      },
+    });
+
+    // Step 4: Save items (if not skipped)
+    const saveResult = await saveItemsStep.execute({
+      inputData: {
+        success: validationResult.success,
+        transcription: validationResult.transcription,
+        language: validationResult.language,
+        extractedItems: validationResult.extractedItems,
+        userId: validationResult.userId,
+        sourceRecordingId: validationResult.sourceRecordingId,
+        skipSaveItems: validationResult.skipSaveItems,
+        extractedFileContent: validationResult.extractedFileContent,
+      },
+    });
+
+    // Step 5: Generate content from predictions
+    const contentResult = await generateContentStep.execute({
+      inputData: {
+        success: saveResult.success,
+        transcription: saveResult.transcription,
+        language: saveResult.language,
+        extractedItems: saveResult.extractedItems,
+        userId: saveResult.userId,
+        sourceRecordingId: saveResult.sourceRecordingId,
+        error: saveResult.error,
+        extractedFileContent: saveResult.extractedFileContent,
+      },
+    });
+
+    // Step 6: Send notifications
+    const notifyResult = await notifyContentStep.execute({
+      inputData: {
+        success: contentResult.success,
+        transcription: contentResult.transcription,
+        language: contentResult.language,
+        extractedItems: contentResult.extractedItems,
+        userId: contentResult.userId,
+        sourceRecordingId: contentResult.sourceRecordingId,
+        error: contentResult.error,
+        generatedContent: contentResult.generatedContent,
+        extractedFileContent: contentResult.extractedFileContent,
+      },
+    });
+
+    return {
+      status: notifyResult.success ? "success" : "error",
+      result: {
+        success: notifyResult.success,
+        transcription: notifyResult.transcription,
+        language: notifyResult.language,
+        extractedItems: notifyResult.extractedItems,
+        generatedContent: notifyResult.generatedContent,
+        error: notifyResult.error,
+      },
+    };
+  } catch (error) {
+    console.error('[processVoiceRecordingFromTranscription] Exception', {
+      userId: params.userId,
+      sourceRecordingId: params.sourceRecordingId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return {
+      status: "error" as const,
+      result: {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        transcription: params.transcription,
+      },
+    };
+  }
 }
 

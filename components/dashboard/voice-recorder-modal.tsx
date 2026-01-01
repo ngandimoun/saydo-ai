@@ -161,7 +161,7 @@ export function VoiceRecorderModal({
     onClose()
   }, [isRecording, stopRecording, onClose])
 
-  // Execute extraction and save changes
+  // Process edited transcription and save items
   const handleDone = useCallback(async () => {
     if (!recordingId) {
       onClose()
@@ -172,15 +172,16 @@ export function VoiceRecorderModal({
     setSaveError(null)
 
     try {
-      // Call execute endpoint to extract items from edited transcription and save them
-      const response = await fetch('/api/voice/execute', {
+      // Call process endpoint with edited transcription
+      // This extracts items and saves them immediately
+      const response = await fetch('/api/voice/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({
-          recordingId,
+          sourceRecordingId: recordingId,
           transcription: editedTranscription.trim(),
           aiSummary: editedAiSummary.trim() || undefined,
         }),
@@ -188,11 +189,11 @@ export function VoiceRecorderModal({
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to execute and save items')
+        throw new Error(errorData.error || 'Failed to process and save items')
       }
 
       const result = await response.json()
-      logger.info('Items executed and saved successfully', { 
+      logger.info('Items processed and saved successfully', { 
         recordingId,
         tasksSaved: result.saved?.tasks || 0,
         remindersSaved: result.saved?.reminders || 0,
@@ -215,8 +216,8 @@ export function VoiceRecorderModal({
 
       onClose()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to execute and save items'
-      logger.error('Failed to execute and save items', { error, recordingId })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process and save items'
+      logger.error('Failed to process and save items', { error, recordingId })
       setSaveError(errorMessage)
       setIsSaving(false)
     }

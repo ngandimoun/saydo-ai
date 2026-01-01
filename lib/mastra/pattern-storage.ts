@@ -46,7 +46,18 @@ function isSchemaCacheError(error: { code?: string }): boolean {
 }
 
 /**
+ * Check if error is a duplicate key constraint violation
+ */
+function isDuplicateKeyError(error: { code?: string; message?: string }): boolean {
+  // PostgreSQL unique violation error code is 23505
+  return error.code === "23505" || error.message?.includes("duplicate key");
+}
+
+/**
  * Save or update a pattern in the database
+ * 
+ * Uses UPSERT logic: If a pattern with the same user_id, pattern_type, and pattern_data
+ * already exists, it updates the frequency and last_seen_at instead of failing.
  * 
  * Includes retry logic with exponential backoff to handle PostgREST schema cache issues.
  * PostgREST caches the database schema and may not immediately see newly created tables.
@@ -63,16 +74,53 @@ export async function savePattern(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const supabase = getSupabaseClient();
+      const patternDataJson = patternData as unknown as Record<string, unknown>;
 
-      // Insert new pattern observation
-      // Note: We create a new pattern entry for each observation
-      // The analysis endpoint will aggregate these into consolidated patterns
+      // First, check if this exact pattern already exists
+      const { data: existingPattern, error: selectError } = await supabase
+        .from("user_patterns")
+        .select("id, frequency, confidence_score")
+        .eq("user_id", userId)
+        .eq("pattern_type", patternType)
+        .eq("pattern_data", patternDataJson)
+        .maybeSingle();
+
+      if (selectError && !isSchemaCacheError(selectError)) {
+        console.error("[savePattern] Select error", selectError);
+        // Continue to try insert anyway
+      }
+
+      // If pattern exists, update it (increment frequency)
+      if (existingPattern) {
+        const newFrequency = existingPattern.frequency + 1;
+        const newConfidence = Math.min(100, existingPattern.confidence_score + 5); // Increase confidence with each observation
+
+        const { error: updateError } = await supabase
+          .from("user_patterns")
+          .update({
+            frequency: newFrequency,
+            confidence_score: newConfidence,
+            last_seen_at: new Date().toISOString(),
+            metadata: metadata || {},
+          })
+          .eq("id", existingPattern.id);
+
+        if (updateError) {
+          console.error("[savePattern] Update error", updateError);
+          return { success: false, error: updateError.message };
+        }
+
+        console.log(`[savePattern] Updated existing pattern, frequency: ${newFrequency}`);
+        return { success: true, patternId: existingPattern.id };
+      }
+
+      // Pattern doesn't exist, insert new one
       const { data, error } = await supabase
         .from("user_patterns")
         .insert({
           user_id: userId,
           pattern_type: patternType,
-          pattern_data: patternData as unknown as Record<string, unknown>,
+          pattern_data: patternDataJson,
           frequency: 1,
           confidence_score: 10, // Initial confidence
           metadata: metadata || {},
@@ -81,6 +129,38 @@ export async function savePattern(
         .single();
 
       if (error) {
+        // Handle duplicate key error (race condition - another request inserted the same pattern)
+        if (isDuplicateKeyError(error)) {
+          console.log("[savePattern] Duplicate key detected, attempting to update existing pattern");
+          
+          // Fetch and update the existing pattern
+          const { data: racePattern } = await supabase
+            .from("user_patterns")
+            .select("id, frequency, confidence_score")
+            .eq("user_id", userId)
+            .eq("pattern_type", patternType)
+            .eq("pattern_data", patternDataJson)
+            .single();
+
+          if (racePattern) {
+            const { error: raceUpdateError } = await supabase
+              .from("user_patterns")
+              .update({
+                frequency: racePattern.frequency + 1,
+                confidence_score: Math.min(100, racePattern.confidence_score + 5),
+                last_seen_at: new Date().toISOString(),
+              })
+              .eq("id", racePattern.id);
+
+            if (!raceUpdateError) {
+              return { success: true, patternId: racePattern.id };
+            }
+          }
+          
+          // If we can't update, still consider it a success (pattern exists)
+          return { success: true, error: "Pattern already exists" };
+        }
+
         // Check if this is a schema cache error and we have retries left
         if (isSchemaCacheError(error) && attempt < maxRetries) {
           const delay = retryDelays[attempt];

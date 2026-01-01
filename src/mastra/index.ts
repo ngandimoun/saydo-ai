@@ -9,6 +9,7 @@ import { smartAgent } from "./agents/smart-agent";
 import { contentAgent } from "./agents/content-agent";
 import { healthDocumentAgent } from "./agents/health-document-agent";
 import { skincareAgent } from "./agents/skincare-agent";
+import { transcriptionPreviewAgent } from "./agents/transcription-preview-agent";
 
 // Tools
 import { getUserProfileTool } from "./tools/user-profile-tool";
@@ -87,9 +88,9 @@ import { saydoMemory } from "./memory/config";
  * Main Mastra instance for Saydo.
  * 
  * Contains:
- * - 6 AI Agents (saydo, voice, task, health, smart, content)
+ * - 9 AI Agents (saydo, voice, task, health, smart, content, healthDocument, skincare, transcriptionPreview)
  * - 15+ Tools (user profile, tasks, health, transcription, patterns, content)
- * - 3 Workflows (voice processing, health analysis, daily summary)
+ * - 4 Workflows (voice processing, health analysis, daily summary, smart upload)
  * - Memory configuration
  */
 export const mastra = new Mastra({
@@ -102,6 +103,7 @@ export const mastra = new Mastra({
     contentAgent,
     healthDocumentAgent,
     skincareAgent,
+    transcriptionPreviewAgent,
   },
   tools: {
     // User profile
@@ -187,6 +189,12 @@ export { healthAgent, createHealthAgent } from "./agents/health-agent";
 export { smartAgent, createSmartAgent, analyzeTranscription } from "./agents/smart-agent";
 export { contentAgent, createContentAgent, generateContent, generateBatchContent } from "./agents/content-agent";
 export { skincareAgent, createSkincareAgent, type SkincareProfile } from "./agents/skincare-agent";
+export { 
+  transcriptionPreviewAgent, 
+  createTranscriptionPreviewAgent, 
+  generatePreview,
+  type PreviewResult 
+} from "./agents/transcription-preview-agent";
 
 // Export tools
 export { getUserProfileTool, getUserContext, getFullUserContext, getUserTimezone, type UserContext, type FullUserContext } from "./tools/user-profile-tool";
