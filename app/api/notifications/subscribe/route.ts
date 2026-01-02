@@ -34,9 +34,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store subscription in database
-    // TODO: Create push_subscriptions table if needed
-    // For now, we'll store it in user metadata or a separate table
+    // Store or update subscription in database
+    const { error: upsertError } = await supabase
+      .from("push_subscriptions")
+      .upsert(
+        {
+          user_id: user.id,
+          subscription: subscription,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        }
+      );
+
+    if (upsertError) {
+      throw upsertError;
+    }
 
     return NextResponse.json({
       success: true,

@@ -14,10 +14,10 @@ export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Data is considered fresh for 5 minutes
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        // Cache data for 30 minutes
-        gcTime: 30 * 60 * 1000, // 30 minutes (formerly cacheTime)
+        // Data is considered fresh for 10 minutes (increased from 5)
+        staleTime: 10 * 60 * 1000, // 10 minutes
+        // Cache data for 1 hour (increased from 30 minutes)
+        gcTime: 60 * 60 * 1000, // 1 hour (formerly cacheTime)
         // Retry failed requests up to 3 times
         retry: 3,
         // Retry delay increases exponentially
@@ -48,6 +48,7 @@ export function getQueryClient() {
   }
   return queryClientInstance
 }
+
 
 
 

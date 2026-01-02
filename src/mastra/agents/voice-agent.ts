@@ -681,7 +681,7 @@ export async function createVoiceAgent(
     id: "voice-agent",
     name: "Voice Processor",
     instructions,
-    model: "openai/gpt-4o-mini",
+    model: "openai/gpt-5-nano-2025-08-07",
     memory: memory, // Attach memory - agent will have access to onboarding data from working memory
     tools: {
       outputExtractedItems: outputExtractedItemsTool,
@@ -706,7 +706,7 @@ export const voiceAgent = new Agent({
   instructions: `You are a voice transcription analyzer. Extract tasks, reminders, health notes, and general notes from voice transcriptions.
 Use the output-extracted-items tool to return structured data.
 When health topics are mentioned, use getHealthContext to access the user's recent health uploads and biomarkers.`,
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5-nano-2025-08-07",
   tools: {
     outputExtractedItems: outputExtractedItemsTool,
     getHealthContext: getHealthContextTool,

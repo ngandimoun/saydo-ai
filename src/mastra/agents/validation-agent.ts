@@ -60,7 +60,7 @@ Your job is to:
     id: "validation-agent",
     name: "Extraction Validator",
     instructions,
-    model: "openai/gpt-4o-mini",
+    model: "openai/gpt-5-nano-2025-08-07",
     tools: {
       outputExtractedItems: outputExtractedItemsTool,
     },

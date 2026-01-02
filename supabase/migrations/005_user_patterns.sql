@@ -53,3 +53,4 @@ COMMENT ON COLUMN user_patterns.metadata IS 'Additional context about the patter
 
 
 
+

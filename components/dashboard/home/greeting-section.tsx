@@ -1,44 +1,58 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Sparkles, TrendingUp, Heart, Zap, Brain, Moon, Coffee, Sun, Cloud, Star } from "lucide-react"
+import { Sun, Cloud, Star, Moon } from "lucide-react"
 import type { UserProfile } from "@/lib/dashboard/types"
 import { getTimeOfDayGreeting, getTimeOfDay } from "@/lib/dashboard/time-utils"
 import { cn } from "@/lib/utils"
 import { springs, staggerContainer, staggerItem, fadeInUp } from "@/lib/motion-system"
-import { SummaryCard } from "@/components/ui/card"
+import { TypingRecap } from "./typing-recap"
+import { useBriefRecap } from "@/hooks/queries/use-brief-recap"
+import { useMotivationalMessage } from "@/hooks/queries/use-motivational-message"
+import { EnhancedTypingMessage } from "./enhanced-typing-message"
 
 /**
  * Greeting Section - Airbnb-Inspired
  * 
  * Emotional greeting with time-aware messaging.
- * "How Saydo helped you" achievement cards.
  * Exploration categories (like Airbnb's category chips).
  */
 
-interface SummaryData {
-  text: string
-  metric: string
-}
-
 interface GreetingSectionProps {
   userProfile: UserProfile
-  proSummary?: SummaryData
-  healthSummary?: SummaryData
 }
 
-// Exploration categories - Airbnb style
-const explorationCategories = [
-  { id: 'energy', label: 'Energy', icon: Zap, color: 'text-amber-500 bg-amber-500/10' },
-  { id: 'focus', label: 'Focus', icon: Brain, color: 'text-indigo-500 bg-indigo-500/10' },
-  { id: 'calm', label: 'Calm', icon: Moon, color: 'text-purple-500 bg-purple-500/10' },
-  { id: 'morning', label: 'Morning', icon: Coffee, color: 'text-orange-500 bg-orange-500/10' },
-]
 
-export function GreetingSection({ userProfile, proSummary, healthSummary }: GreetingSectionProps) {
+export function GreetingSection({ 
+  userProfile,
+}: GreetingSectionProps) {
   const greeting = getTimeOfDayGreeting(userProfile.preferredName, userProfile.language)
-  const hour = new Date().getHours()
   const timeOfDay = getTimeOfDay()
+  
+  const { 
+    data: briefRecap, 
+    isLoading: briefRecapLoading,
+    isError: briefRecapError,
+    error: briefRecapErrorDetails
+  } = useBriefRecap()
+  
+  // Log for debugging
+  if (briefRecapError) {
+    console.error('[GreetingSection] Brief recap error:', briefRecapErrorDetails)
+  }
+  
+  // Fetch personalized motivational message
+  const { 
+    data: motivationalMessage, 
+    isLoading: motivationalMessageLoading,
+    isError: motivationalMessageError,
+    error: motivationalMessageErrorDetails
+  } = useMotivationalMessage()
+  
+  // Log for debugging
+  if (motivationalMessageError) {
+    console.error('[GreetingSection] Motivational message error:', motivationalMessageErrorDetails)
+  }
   
   // Capitalize first letter of name
   const capitalizeName = (name: string) => {
@@ -47,13 +61,6 @@ export function GreetingSection({ userProfile, proSummary, healthSummary }: Gree
   }
   
   const displayName = capitalizeName(userProfile.preferredName)
-  
-  // Time-aware messaging
-  const getTimeMessage = () => {
-    if (hour < 12) return "Ready to make today count?"
-    if (hour < 17) return "Let's keep the momentum going"
-    return "Wind down and reflect"
-  }
 
   // Get time-based icons
   const getTimeIcons = () => {
@@ -105,17 +112,6 @@ export function GreetingSection({ userProfile, proSummary, healthSummary }: Gree
   const PrimaryIcon = timeIcons.primary
   const SecondaryIcon = timeIcons.secondary
 
-  // Use real data with fallback to empty state
-  const displayProSummary = proSummary || {
-    text: "Record a voice note to get AI-powered insights about your work.",
-    metric: "No activity yet"
-  }
-
-  const displayHealthSummary = healthSummary || {
-    text: "Share your health goals and I'll help track your progress.",
-    metric: "No insights yet"
-  }
-
   return (
     <motion.section 
       className="space-y-6"
@@ -128,21 +124,18 @@ export function GreetingSection({ userProfile, proSummary, healthSummary }: Gree
         variants={fadeInUp}
         className="space-y-2"
       >
-        <motion.p 
-          className="text-sm font-medium text-muted-foreground"
-          initial={{ opacity: 0 }}
-          animate={{ 
-            opacity: [0.7, 1, 0.7],
-          }}
-          transition={{ 
-            delay: 0.1,
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          {getTimeMessage()}
-        </motion.p>
+        <EnhancedTypingMessage
+          text={motivationalMessage || null}
+          isLoading={motivationalMessageLoading}
+          variant="motivational"
+          loopDelay={6000}
+          className="text-sm font-medium"
+        />
+        {motivationalMessageError && (
+          <p className="text-xs text-muted-foreground/60">
+            (Using fallback message)
+          </p>
+        )}
         
         <h1 className="font-display relative">
           {/* Time-based decorative icons */}
@@ -248,103 +241,22 @@ export function GreetingSection({ userProfile, proSummary, healthSummary }: Gree
         </h1>
       </motion.div>
 
-      {/* Exploration Categories - Airbnb Style */}
+      {/* Typing Recap */}
       <motion.div
         variants={fadeInUp}
-        className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide"
+        className="py-2"
       >
-        {explorationCategories.map((cat, index) => {
-          const Icon = cat.icon
-          return (
-            <motion.button
-              key={cat.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 + index * 0.05, ...springs.gentle }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-full",
-                "bg-card border border-border",
-                "text-sm font-medium text-foreground",
-                "hover:border-primary/30 hover:bg-primary/5",
-                "transition-colors duration-200",
-                "whitespace-nowrap flex-shrink-0"
-              )}
-            >
-              <div className={cn("p-1 rounded-lg", cat.color)}>
-                <Icon size={14} />
-              </div>
-              {cat.label}
-            </motion.button>
-          )
-        })}
-      </motion.div>
-
-      {/* How Saydo Helped You - Achievement Cards */}
-      <motion.div
-        variants={fadeInUp}
-        className="grid grid-cols-2 gap-3"
-      >
-        {/* Pro Life Summary */}
-        <SummaryCard
-          icon={<TrendingUp size={18} />}
-          iconColor="teal"
-          label="Pro Life"
-          title="Work Summary"
-          description={displayProSummary.text}
-          metric={displayProSummary.metric}
+        <TypingRecap
+          text={briefRecap || null}
+          isLoading={briefRecapLoading}
+          loopDelay={5000}
         />
-
-        {/* Health Summary */}
-        <SummaryCard
-          icon={<Heart size={18} />}
-          iconColor="rose"
-          label="Health"
-          title="Health Summary"
-          description={displayHealthSummary.text}
-          metric={displayHealthSummary.metric}
-        />
-      </motion.div>
-
-      {/* Ask Saydo - Conversational Input */}
-      <motion.button
-        variants={fadeInUp}
-        whileHover={{ scale: 1.01, y: -2 }}
-        whileTap={{ scale: 0.99 }}
-        transition={springs.gentle}
-        className={cn(
-          "w-full p-4 rounded-2xl",
-          "bg-card border border-border",
-          "flex items-center gap-4",
-          "hover:border-primary/30 hover:shadow-md",
-          "transition-all duration-200",
-          "text-left group"
+        {briefRecapError && (
+          <p className="text-xs text-muted-foreground/60">
+            (Using fallback message)
+          </p>
         )}
-      >
-        <div className={cn(
-          "p-2.5 rounded-xl",
-          "bg-gradient-to-br from-primary/10 to-teal-500/5",
-          "group-hover:from-primary/15 group-hover:to-teal-500/10",
-          "transition-colors duration-200"
-        )}>
-          <Sparkles size={18} className="text-primary" />
-        </div>
-        <div className="flex-1">
-          <span className="text-muted-foreground text-sm">
-            Ask anything about your health or work...
-          </span>
-        </div>
-        <motion.div
-          animate={{ x: [0, 4, 0] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          className="text-muted-foreground/50"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </motion.div>
-      </motion.button>
+      </motion.div>
     </motion.section>
   )
 }

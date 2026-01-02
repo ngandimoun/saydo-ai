@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { getUserIdFromContext } from "./utils";
 
 /**
  * Get Supabase client
@@ -159,8 +160,11 @@ export const getHealthContextTool = createTool({
     context: HealthContextSchema.optional(),
     error: z.string().optional(),
   }),
-  execute: async ({ userId, includeIntake, includeBiomarkers, includeMedications, includeInsights, daysBack }) => {
+  execute: async ({ userId, includeIntake, includeBiomarkers, includeMedications, includeInsights, daysBack }, context?) => {
     try {
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
       const supabase = getSupabaseClient();
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysBack);
@@ -170,7 +174,7 @@ export const getHealthContextTool = createTool({
       const { data: documents } = await supabase
         .from("health_documents")
         .select("id, document_type, uploaded_at, allergy_warnings")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .gte("uploaded_at", cutoffIso)
         .order("uploaded_at", { ascending: false })
         .limit(20);
@@ -192,7 +196,7 @@ export const getHealthContextTool = createTool({
         const { data: intake } = await supabase
           .from("intake_log")
           .select("id, intake_type, name, health_score, logged_at, allergy_match")
-          .eq("user_id", userId)
+          .eq("user_id", actualUserId)
           .gte("logged_at", cutoffIso)
           .order("logged_at", { ascending: false })
           .limit(10);
@@ -215,7 +219,7 @@ export const getHealthContextTool = createTool({
         const { data: biomarkers } = await supabase
           .from("biomarkers")
           .select("name, value, unit, status, reference_min, reference_max, measured_at")
-          .eq("user_id", userId)
+          .eq("user_id", actualUserId)
           .order("measured_at", { ascending: false })
           .limit(50);
 
@@ -256,7 +260,7 @@ export const getHealthContextTool = createTool({
         const { data: meds } = await supabase
           .from("intake_log")
           .select("name, active_ingredients, logged_at")
-          .eq("user_id", userId)
+          .eq("user_id", actualUserId)
           .eq("intake_type", "medication")
           .gte("logged_at", cutoffIso)
           .order("logged_at", { ascending: false })
@@ -283,7 +287,7 @@ export const getHealthContextTool = createTool({
         const { data: insights } = await supabase
           .from("health_insights")
           .select("type, title, content, priority, created_at")
-          .eq("user_id", userId)
+          .eq("user_id", actualUserId)
           .gte("created_at", cutoffIso)
           .order("created_at", { ascending: false })
           .limit(5);
@@ -301,7 +305,7 @@ export const getHealthContextTool = createTool({
       const { data: trendData } = await supabase
         .from("health_trends")
         .select("metric_name, trend_direction")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .order("calculated_at", { ascending: false })
         .limit(20);
 
@@ -376,14 +380,17 @@ export const getRecentHealthDocumentsTool = createTool({
     })).optional(),
     error: z.string().optional(),
   }),
-  execute: async ({ userId, documentType, limit }) => {
+  execute: async ({ userId, documentType, limit }, context?) => {
     try {
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
       const supabase = getSupabaseClient();
 
       let query = supabase
         .from("health_documents")
         .select("id, file_name, document_type, status, analysis_summary, health_impact, allergy_warnings, uploaded_at")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .order("uploaded_at", { ascending: false })
         .limit(limit);
 
@@ -445,14 +452,17 @@ export const getBiomarkerHistoryTool = createTool({
     trend: z.string().optional(), // "improving", "declining", "stable"
     error: z.string().optional(),
   }),
-  execute: async ({ userId, biomarkerName, limit }) => {
+  execute: async ({ userId, biomarkerName, limit }, context?) => {
     try {
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
       const supabase = getSupabaseClient();
 
       const { data, error } = await supabase
         .from("biomarkers")
         .select("value, unit, status, measured_at, reference_min, reference_max")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .ilike("name", `%${biomarkerName}%`)
         .order("measured_at", { ascending: false })
         .limit(limit);
@@ -534,6 +544,7 @@ export async function getHealthContext(userId: string, daysBack = 30): Promise<H
 
   return result.success ? result.context || null : null;
 }
+
 
 
 

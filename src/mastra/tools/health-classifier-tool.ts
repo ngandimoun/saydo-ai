@@ -262,7 +262,7 @@ Respond with a JSON object containing:
 Be specific about what you see in the image. For food, identify the dish. For supplements, identify the brand or type. For lab results, note the format and what body system they test. For skincare products, identify the product type and brand if visible.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",

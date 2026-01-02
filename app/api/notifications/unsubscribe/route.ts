@@ -24,8 +24,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Remove subscription from database
-    // TODO: Delete from push_subscriptions table
+    // Delete subscription from database
+    const { error } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json({
       success: true,
@@ -42,4 +49,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

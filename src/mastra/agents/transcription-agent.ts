@@ -92,7 +92,7 @@ export function createTranscriptionAgent(userContext: UserContext): Agent {
     id: "transcription-agent",
     name: "Transcription Cleaner",
     instructions: generateTranscriptionAgentPrompt(userContext),
-    model: "openai/gpt-4o-mini",
+    model: "openai/gpt-5-nano-2025-08-07",
     // No tools needed - just text-to-text transformation
   });
 }
@@ -104,7 +104,7 @@ export const transcriptionAgent = new Agent({
   id: "transcription-agent",
   name: "Transcription Cleaner",
   instructions: `You are a transcription cleaning specialist. Clean and correct raw voice transcriptions to make them grammatically correct and easy to read. Preserve the original language and meaning.`,
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5-nano-2025-08-07",
 });
 
 /**

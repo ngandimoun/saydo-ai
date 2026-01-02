@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { formatDisplayDate, formatDisplayTime } from "@/lib/dashboard/time-utils"
 import type { UserProfile } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
+import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
+import { useUnreadNotificationCount } from "@/hooks/queries/use-pro-data"
 
 /**
  * Dashboard Header
@@ -27,7 +29,8 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ userProfile, className }: DashboardHeaderProps) {
   const [currentTime] = useState(new Date())
-  const [notificationCount] = useState(3) // TODO: Fetch from backend
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const notificationCount = useUnreadNotificationCount()
   
   const language = userProfile?.language || 'en'
 
@@ -75,11 +78,17 @@ export function DashboardHeader({ userProfile, className }: DashboardHeaderProps
             </span>
 
             {/* Notifications */}
+            <NotificationCenter 
+              isOpen={notificationOpen}
+              onOpenChange={setNotificationOpen}
+              showButton={false}
+            />
             <Button 
               variant="ghost" 
               size="icon"
               className="h-10 w-10 rounded-full relative"
               aria-label="Notifications"
+              onClick={() => setNotificationOpen(!notificationOpen)}
             >
               <Bell size={20} />
               {notificationCount > 0 && (
@@ -125,6 +134,7 @@ export function DashboardHeader({ userProfile, className }: DashboardHeaderProps
     </header>
   )
 }
+
 
 
 

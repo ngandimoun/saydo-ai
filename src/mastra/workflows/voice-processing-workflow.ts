@@ -1518,7 +1518,7 @@ const generateContentStep = createStep({
               professionContext: userContext.profession?.name,
               confidenceScore: prediction.confidence,
               generationType: prediction.confidence >= 0.8 ? "explicit" : "proactive",
-              modelUsed: "gpt-4o",
+              modelUsed: "gpt-5-mini-2025-08-07",
             }
           );
 

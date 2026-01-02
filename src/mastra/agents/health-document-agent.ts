@@ -177,7 +177,7 @@ export function createHealthDocumentAgent(userContext: UserContext): Agent {
     id: "health-document-agent",
     name: "Health Document Analyzer",
     instructions: generateHealthDocumentAgentPrompt(userContext),
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5-mini-2025-08-07",
     tools: {
       classifyHealthDocument: classifyHealthDocumentTool,
       analyzeFood: analyzeFoodTool,
@@ -201,7 +201,7 @@ export const healthDocumentAgent = new Agent({
   instructions: `You are a health document analysis agent. Analyze uploaded health-related files.
 Use the classification tool first, then the appropriate analysis tool based on document type.
 Always check for allergens and provide personalized insights.`,
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5-mini-2025-08-07",
   tools: {
     classifyHealthDocument: classifyHealthDocumentTool,
     analyzeFood: analyzeFoodTool,
@@ -391,6 +391,7 @@ export async function analyzeHealthDocument(
     summary,
   };
 }
+
 
 
 

@@ -12,7 +12,16 @@
  * - Playlist management
  * - Background playback (mobile)
  * - Preloading and buffering
+ * - Media Session API for lock screen controls
  */
+
+import {
+  setupMediaSession,
+  updateMediaSessionPlaybackState,
+  updateMediaSessionPositionState,
+  clearMediaSession,
+  type AudioTrack as MediaSessionTrack,
+} from './media-session'
 
 export interface AudioPlayerCallbacks {
   onPlay?: () => void
@@ -22,6 +31,12 @@ export interface AudioPlayerCallbacks {
   onError?: (error: Error) => void
   onLoadedMetadata?: (duration: number) => void
   onCanPlay?: () => void
+}
+
+export interface AudioPlayerMediaSessionCallbacks {
+  onPrevious?: () => void
+  onNext?: () => void
+  onSeek?: (time: number) => void
 }
 
 /**
@@ -41,6 +56,16 @@ const NETWORK_EMPTY = 0
 const NETWORK_IDLE = 1
 const NETWORK_LOADING = 2
 const NETWORK_NO_SOURCE = 3
+
+/**
+ * Audio Ready State
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/readyState
+ */
+const HAVE_NOTHING = 0
+const HAVE_METADATA = 1
+const HAVE_CURRENT_DATA = 2
+const HAVE_FUTURE_DATA = 3
+const HAVE_ENOUGH_DATA = 4
 
 /**
  * Check if a URL is a mock/placeholder URL that won't work
@@ -147,29 +172,102 @@ function getAudioErrorMessage(
 export class AudioPlayer {
   private audio: HTMLAudioElement | null = null
   private callbacks: AudioPlayerCallbacks = {}
+  private mediaSessionCallbacks: AudioPlayerMediaSessionCallbacks = {}
   private currentUrl: string | null = null
   private isInitialized = false
+  private currentTrack: MediaSessionTrack | null = null
+  private positionUpdateInterval: number | null = null
+  private playPromise: Promise<void> | null = null
+  private isPlayingInternal = false
+  private debounceTimeout: number | null = null
+  private isMounted = true
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.audio = new Audio()
       this.setupEventListeners()
+      this.setupBackgroundPlayback()
+      this.setupVisibilityHandling()
       this.isInitialized = true
     }
+  }
+
+  /**
+   * Setup audio element for background playback
+   */
+  private setupBackgroundPlayback() {
+    if (!this.audio) return
+
+    // Enable background playback
+    this.audio.setAttribute('playsinline', 'true')
+    this.audio.setAttribute('webkit-playsinline', 'true')
+    
+    // Allow cross-origin if needed (for CORS)
+    this.audio.crossOrigin = 'anonymous'
+    
+    // Preload audio for better background playback
+    this.audio.preload = 'auto'
+    
+    // Ensure audio continues in background
+    // This is critical for PWA background playback
+    if ('mediaSession' in navigator) {
+      // Media Session API will handle background controls
+      // But we need to ensure the audio element doesn't pause
+      this.audio.addEventListener('pause', (e) => {
+        // Only pause if explicitly paused by user, not due to visibility change
+        // The Media Session API will handle background controls
+      })
+    }
+  }
+
+  /**
+   * Handle page visibility changes (screen lock/unlock)
+   */
+  private setupVisibilityHandling() {
+    if (typeof document === 'undefined') return
+
+    document.addEventListener('visibilitychange', () => {
+      // Audio should continue playing when page is hidden (screen locked)
+      // Don't pause audio when visibility changes
+      // The Media Session API handles lock screen controls
+      if (document.hidden && this.audio && !this.audio.paused) {
+        // Ensure audio continues playing when page becomes hidden
+        // Some browsers may pause audio on visibility change, so we resume if needed
+        // Use a small delay to avoid conflicts with browser's own handling
+        setTimeout(() => {
+          if (this.audio && !this.audio.paused && this.isPlayingInternal) {
+            // Audio is still playing, good
+          } else if (this.audio && this.isPlayingInternal) {
+            // Audio was paused by browser, resume it
+            this.audio.play().catch(() => {
+              // Ignore errors - may be due to autoplay restrictions
+            })
+          }
+        }, 100)
+      }
+    })
   }
 
   private setupEventListeners() {
     if (!this.audio) return
 
     this.audio.addEventListener('play', () => {
+      this.isPlayingInternal = true
+      updateMediaSessionPlaybackState('playing')
+      this.startPositionUpdates()
       this.callbacks.onPlay?.()
     })
 
     this.audio.addEventListener('pause', () => {
+      this.isPlayingInternal = false
+      updateMediaSessionPlaybackState('paused')
+      this.stopPositionUpdates()
       this.callbacks.onPause?.()
     })
 
     this.audio.addEventListener('ended', () => {
+      updateMediaSessionPlaybackState('none')
+      this.stopPositionUpdates()
       this.callbacks.onEnded?.()
     })
 
@@ -243,7 +341,73 @@ export class AudioPlayer {
       this.audio.setAttribute('webkit-playsinline', 'true')
     }
     
+    // Ensure audio can play in background (PWA support)
+    // Load the audio to prepare for background playback
+    this.audio.load()
+    
     return true
+  }
+
+  /**
+   * Set Media Session track and callbacks
+   */
+  setMediaSessionTrack(
+    track: MediaSessionTrack | null,
+    callbacks?: AudioPlayerMediaSessionCallbacks
+  ): void {
+    this.currentTrack = track
+    if (callbacks) {
+      this.mediaSessionCallbacks = callbacks
+    }
+
+    if (track) {
+      setupMediaSession(track, {
+        onPlay: () => {
+          this.play().catch(() => {
+            // Ignore errors
+          })
+        },
+        onPause: () => {
+          this.pause()
+        },
+        onPrevious: this.mediaSessionCallbacks.onPrevious,
+        onNext: this.mediaSessionCallbacks.onNext,
+        onSeek: this.mediaSessionCallbacks.onSeek,
+      })
+    } else {
+      clearMediaSession()
+    }
+  }
+
+  /**
+   * Start updating Media Session position state
+   */
+  startPositionUpdates(): void {
+    if (this.positionUpdateInterval) {
+      return // Already updating
+    }
+
+    this.positionUpdateInterval = window.setInterval(() => {
+      if (this.audio && this.currentTrack) {
+        const duration = this.audio.duration || this.currentTrack.durationSeconds
+        const position = this.audio.currentTime
+        const playbackRate = this.audio.playbackRate
+
+        if (!isNaN(duration) && !isNaN(position)) {
+          updateMediaSessionPositionState(duration, position, playbackRate)
+        }
+      }
+    }, 1000) // Update every second
+  }
+
+  /**
+   * Stop updating Media Session position state
+   */
+  stopPositionUpdates(): void {
+    if (this.positionUpdateInterval) {
+      clearInterval(this.positionUpdateInterval)
+      this.positionUpdateInterval = null
+    }
   }
 
   /**
@@ -284,9 +448,80 @@ export class AudioPlayer {
       throw error
     }
 
+    // Cancel any pending play promise
+    if (this.playPromise) {
+      try {
+        await this.playPromise
+      } catch {
+        // Ignore errors from previous play promise
+      }
+      this.playPromise = null
+    }
+
+    // Check readyState - need at least HAVE_FUTURE_DATA to play smoothly
+    if (this.audio.readyState < HAVE_FUTURE_DATA) {
+      // Wait for canplay event if not ready
+      await new Promise<void>((resolve, reject) => {
+        if (!this.audio) {
+          reject(new Error('Audio player not initialized'))
+          return
+        }
+
+        if (this.audio.readyState >= HAVE_FUTURE_DATA) {
+          resolve()
+          return
+        }
+
+        const onCanPlay = () => {
+          if (this.audio) {
+            this.audio.removeEventListener('canplay', onCanPlay)
+            this.audio.removeEventListener('error', onError)
+          }
+          resolve()
+        }
+
+        const onError = () => {
+          if (this.audio) {
+            this.audio.removeEventListener('canplay', onCanPlay)
+            this.audio.removeEventListener('error', onError)
+          }
+          reject(new Error('Audio failed to load'))
+        }
+
+        this.audio.addEventListener('canplay', onCanPlay, { once: true })
+        this.audio.addEventListener('error', onError, { once: true })
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          if (this.audio) {
+            this.audio.removeEventListener('canplay', onCanPlay)
+            this.audio.removeEventListener('error', onError)
+          }
+          reject(new Error('Audio loading timeout'))
+        }, 10000)
+      })
+    }
+
+    // If already playing, don't call play() again
+    if (!this.audio.paused && this.isPlayingInternal) {
+      return
+    }
+
     try {
-      await this.audio.play()
+      this.playPromise = this.audio.play()
+      await this.playPromise
+      this.isPlayingInternal = true
+      this.playPromise = null
     } catch (error) {
+      this.playPromise = null
+      
+      // Handle AbortError gracefully - this happens when play() is interrupted by pause()
+      // This is expected behavior and not an error
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Silently ignore - this is expected when interrupting play
+        return
+      }
+      
       // Handle autoplay restrictions
       if (error instanceof Error && error.name === 'NotAllowedError') {
         throw new Error('Autoplay blocked. User interaction required.')
@@ -300,7 +535,14 @@ export class AudioPlayer {
    */
   pause(): void {
     if (!this.audio) return
+    
+    // Cancel any pending play promise
+    if (this.playPromise) {
+      this.playPromise = null
+    }
+    
     this.audio.pause()
+    this.isPlayingInternal = false
   }
 
   /**
@@ -338,7 +580,7 @@ export class AudioPlayer {
    * Get playback state
    */
   isPlaying(): boolean {
-    return this.audio ? !this.audio.paused : false
+    return this.audio ? !this.audio.paused && this.isPlayingInternal : false
   }
 
   /**
@@ -375,6 +617,22 @@ export class AudioPlayer {
    * Cleanup and destroy the player
    */
   destroy(): void {
+    this.isMounted = false
+    
+    // Clear debounce timeout
+    if (this.debounceTimeout) {
+      clearTimeout(this.debounceTimeout)
+      this.debounceTimeout = null
+    }
+    
+    // Cancel any pending play promise
+    if (this.playPromise) {
+      this.playPromise = null
+    }
+    
+    this.stopPositionUpdates()
+    clearMediaSession()
+    
     if (this.audio) {
       this.audio.pause()
       this.audio.src = ''
@@ -382,7 +640,10 @@ export class AudioPlayer {
       this.audio = null
     }
     this.callbacks = {}
+    this.mediaSessionCallbacks = {}
     this.currentUrl = null
+    this.currentTrack = null
+    this.isPlayingInternal = false
   }
 
   /**

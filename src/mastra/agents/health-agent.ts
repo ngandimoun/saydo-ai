@@ -299,7 +299,7 @@ export function createHealthAgent(userContext: UserContext): Agent {
     id: "health-agent",
     name: "Health Advisor",
     instructions: generateHealthAgentPrompt(userContext),
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5-mini-2025-08-07",
     tools: {
       outputHealthAnalysis: outputHealthAnalysisTool,
       createHealthInsight: createHealthInsightTool,
@@ -319,7 +319,7 @@ export const healthAgent = new Agent({
   instructions: `You are a health advisor for Saydo. Provide personalized health recommendations.
 Always check for user allergies before making food recommendations.
 Use the available tools to fetch environment data and save health insights.`,
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5-mini-2025-08-07",
   tools: {
     outputHealthAnalysis: outputHealthAnalysisTool,
     createHealthInsight: createHealthInsightTool,

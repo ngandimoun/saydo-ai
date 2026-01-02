@@ -10,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#F7F5F0',
     theme_color: '#0D9488',
     orientation: 'portrait-primary',
-    categories: ['productivity', 'health', 'lifestyle'],
+    categories: ['productivity', 'health', 'lifestyle', 'music'],
     icons: [
       { 
         src: '/icon-192.png', 
@@ -41,6 +41,13 @@ export default function manifest(): MetadataRoute.Manifest {
         short_name: 'Scan',
         description: 'Scan a lab result or document',
         url: '/?action=scan',
+      },
+      {
+        name: 'Calm Zone',
+        short_name: 'Calm',
+        description: 'Listen to music and meditations',
+        url: '/dashboard/calm',
+        icons: [{ src: '/icon-192.png', sizes: '192x192' }],
       },
     ],
   }

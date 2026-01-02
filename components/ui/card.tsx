@@ -423,6 +423,7 @@ interface SummaryCardProps extends React.ComponentProps<"div"> {
   title: string
   description: string
   metric?: string
+  onClick?: () => void
 }
 
 function SummaryCard({
@@ -433,6 +434,7 @@ function SummaryCard({
   title,
   description,
   metric,
+  onClick,
   ...props
 }: SummaryCardProps) {
   const colorStyles = {
@@ -445,11 +447,14 @@ function SummaryCard({
   return (
     <motion.div
       whileHover={{ y: -2 }}
+      whileTap={onClick ? { scale: 0.98 } : undefined}
       transition={springs.gentle}
+      onClick={onClick}
       className={cn(
         "p-5 rounded-2xl border",
         "bg-gradient-to-br from-card to-card/80",
         colorStyles[iconColor],
+        onClick && "cursor-pointer",
         className
       )}
       {...props}

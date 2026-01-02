@@ -268,7 +268,7 @@ export function createSkincareAgent(
     id: "skincare-agent",
     name: "Skincare Advisor",
     instructions: generateSkincareAgentPrompt(userContext, skincareProfile),
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5-mini-2025-08-07",
     tools: {
       outputSkincareAnalysis: outputSkincareAnalysisTool,
       analyzeSkincareProduct: analyzeSkincareProductTool,
@@ -293,7 +293,7 @@ export const skincareAgent = new Agent({
 Always check for user allergies before making product recommendations.
 Use the available tools to analyze products, build routines, and provide advice.
 Emphasize daily sunscreen use and proper product order in routines.`,
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5-mini-2025-08-07",
   tools: {
     outputSkincareAnalysis: outputSkincareAnalysisTool,
     analyzeSkincareProduct: analyzeSkincareProductTool,
@@ -311,5 +311,6 @@ Emphasize daily sunscreen use and proper product order in routines.`,
  * Export skin type data for use elsewhere
  */
 export { SKIN_TYPE_RECOMMENDATIONS };
+
 
 

@@ -58,6 +58,8 @@ import {
 import {
   generateRecommendationsTool,
   generateMealPlanTool,
+  getMealPlanTool,
+  getHealthRecommendationsTool,
   createInterventionTool,
   updateHealthScoreTool,
   updateStreakTool,
@@ -156,6 +158,8 @@ export const mastra = new Mastra({
     // Health Engagement Tools
     generateRecommendations: generateRecommendationsTool,
     generateMealPlan: generateMealPlanTool,
+    getMealPlan: getMealPlanTool,
+    getHealthRecommendations: getHealthRecommendationsTool,
     createIntervention: createInterventionTool,
     updateHealthScore: updateHealthScoreTool,
     updateStreak: updateStreakTool,
@@ -256,6 +260,8 @@ export {
 export {
   generateRecommendationsTool,
   generateMealPlanTool,
+  getMealPlanTool,
+  getHealthRecommendationsTool,
   createInterventionTool,
   updateHealthScoreTool,
   updateStreakTool,

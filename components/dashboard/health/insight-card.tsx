@@ -114,3 +114,4 @@ export function InsightCard({ insight, delay = 0 }: InsightCardProps) {
 
 
 
+

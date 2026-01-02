@@ -275,7 +275,7 @@ export async function createSmartAgent(
     id: "smart-proactive-agent",
     name: "Smart Proactive Agent",
     instructions,
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5-mini-2025-08-07",
     tools: {
       outputSmartAnalysis: outputSmartAnalysisTool,
     },
@@ -352,11 +352,12 @@ export const smartAgent = new Agent({
   instructions: `You are an intelligent AI assistant that analyzes voice transcriptions and predicts user needs.
 Analyze conversations for both explicit requests and implicit opportunities.
 Use the output-smart-analysis tool to return structured analysis.`,
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5-mini-2025-08-07",
   tools: {
     outputSmartAnalysis: outputSmartAnalysisTool,
   },
 });
+
 
 
 

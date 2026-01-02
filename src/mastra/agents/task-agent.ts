@@ -296,7 +296,7 @@ export function createTaskAgent(userContext: UserContext): Agent {
     id: "task-agent",
     name: "Task Extractor",
     instructions: generateTaskAgentPrompt(userContext),
-    model: "openai/gpt-4o-mini",
+    model: "openai/gpt-5-nano-2025-08-07",
     tools: {
       outputTaskExtraction: outputTaskExtractionTool,
       parseDate: parseDateTool,
@@ -314,7 +314,7 @@ export const taskAgent = new Agent({
   name: "Task Extractor",
   instructions: `You are a task extraction agent. Extract and categorize tasks from user input.
 Use parse-date for date parsing and output-task-extraction for structured output.`,
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5-nano-2025-08-07",
   tools: {
     outputTaskExtraction: outputTaskExtractionTool,
     parseDate: parseDateTool,

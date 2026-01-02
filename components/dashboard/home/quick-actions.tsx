@@ -1,10 +1,11 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { motion } from "framer-motion"
 import { Heart, CheckSquare, Moon, Mic, Briefcase } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { springs, staggerContainer, staggerItem } from "@/lib/motion-system"
+import { prefetchHealthData, prefetchTasksData, prefetchProData, prefetchCalmData } from "@/lib/prefetch-utils"
 
 /**
  * Quick Actions Grid - Airbnb-Inspired
@@ -66,10 +67,21 @@ const quickActions: QuickAction[] = [
 ]
 
 export function QuickActions() {
-  const router = useRouter()
-
-  const handleAction = (action: QuickAction) => {
-    router.push(action.href)
+  const handlePrefetch = (actionId: string) => {
+    switch (actionId) {
+      case 'health':
+        prefetchHealthData().catch(console.error)
+        break
+      case 'tasks':
+        prefetchTasksData().catch(console.error)
+        break
+      case 'pro':
+        prefetchProData().catch(console.error)
+        break
+      case 'calm':
+        prefetchCalmData().catch(console.error)
+        break
+    }
   }
 
   return (
@@ -94,35 +106,42 @@ export function QuickActions() {
         {quickActions.map((action, index) => {
           const Icon = action.icon
           return (
-            <motion.button
+            <motion.div
               key={action.id}
               variants={staggerItem}
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
               transition={springs.snappy}
-              onClick={() => handleAction(action)}
-              className={cn(
-                "flex flex-col items-center justify-center gap-2 p-4 rounded-2xl",
-                "bg-gradient-to-br border border-border/50",
-                "hover:border-border hover:shadow-md",
-                "transition-all duration-200 touch-manipulation",
-                action.bgGradient
-              )}
             >
-              <motion.div 
+              <Link
+                href={action.href}
+                prefetch={true}
+                onMouseEnter={() => handlePrefetch(action.id)}
+                onTouchStart={() => handlePrefetch(action.id)}
                 className={cn(
-                  "w-11 h-11 rounded-xl flex items-center justify-center",
-                  "bg-card shadow-sm"
+                  "flex flex-col items-center justify-center gap-2 p-4 rounded-2xl",
+                  "bg-gradient-to-br border border-border/50",
+                  "hover:border-border hover:shadow-md",
+                  "transition-all duration-200 touch-manipulation",
+                  "block",
+                  action.bgGradient
                 )}
-                whileHover={{ rotate: 5 }}
-                transition={springs.bouncy}
               >
-                <Icon size={22} className={action.iconColor} />
-              </motion.div>
-              <span className="text-xs font-medium text-foreground">
-                {action.label}
-              </span>
-            </motion.button>
+                <motion.div 
+                  className={cn(
+                    "w-11 h-11 rounded-xl flex items-center justify-center",
+                    "bg-card shadow-sm"
+                  )}
+                  whileHover={{ rotate: 5 }}
+                  transition={springs.bouncy}
+                >
+                  <Icon size={22} className={action.iconColor} />
+                </motion.div>
+                <span className="text-xs font-medium text-foreground">
+                  {action.label}
+                </span>
+              </Link>
+            </motion.div>
           )
         })}
       </div>

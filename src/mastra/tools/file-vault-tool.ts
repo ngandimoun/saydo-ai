@@ -11,6 +11,7 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
+import { getUserIdFromContext } from "./utils";
 
 // pdf-parse is a CommonJS module - we'll use dynamic import
 
@@ -156,7 +157,7 @@ async function extractPdfContent(fileUrl: string): Promise<ExtractionResult> {
     const base64 = Buffer.from(buffer).toString("base64");
 
     const visionResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5-mini-2025-08-07",
       messages: [
         {
           role: "user",
@@ -203,7 +204,7 @@ async function extractImageContent(fileUrl: string): Promise<ExtractionResult> {
     const mimeType = getMimeTypeFromUrl(fileUrl);
 
     const visionResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5-mini-2025-08-07",
       messages: [
         {
           role: "user",
@@ -257,7 +258,7 @@ async function extractSpreadsheetContent(fileUrl: string): Promise<ExtractionRes
 
     // Use GPT-4o to analyze and summarize
     const analysisResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5-mini-2025-08-07",
       messages: [
         {
           role: "system",
@@ -321,7 +322,7 @@ async function extractPresentationContent(fileUrl: string): Promise<ExtractionRe
 
     // Summarize with GPT-4o
     const summaryResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5-mini-2025-08-07",
       messages: [
         {
           role: "user",
@@ -373,9 +374,9 @@ async function extractDocumentContent(fileUrl: string): Promise<ExtractionResult
 // Tool A: Get Work Files
 export const getWorkFilesTool = createTool({
   id: "get-work-files",
-  description: "Lists all work files for a user with metadata",
+  description: "Lists all work files for a user with metadata. NOTE: userId is automatically provided - you don't need to pass it.",
   inputSchema: z.object({
-    userId: z.string(),
+    userId: z.string().optional().describe("User ID (automatically provided - do not pass this parameter)"),
     fileType: z
       .enum(["pdf", "image", "document", "spreadsheet", "presentation", "other"])
       .optional(),
@@ -397,14 +398,17 @@ export const getWorkFilesTool = createTool({
     ),
     error: z.string().optional(),
   }),
-  execute: async ({ userId, fileType, limit }) => {
+  execute: async ({ userId, fileType, limit }, context?) => {
     try {
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
       const supabase = getSupabaseClient();
 
       let query = supabase
         .from("work_files")
         .select("id, file_name, custom_name, description, category, file_type, file_url, uploaded_at")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .order("uploaded_at", { ascending: false })
         .limit(limit);
 
@@ -686,7 +690,7 @@ export const analyzeFileContentTool = createTool({
       };
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",

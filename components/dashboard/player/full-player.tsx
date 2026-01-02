@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect, useState, useCallback } from "react"
+import { useRef, useState, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Play, 
@@ -55,6 +55,14 @@ interface FullPlayerProps {
   onClose: () => void
   onNext?: () => void
   onPrevious?: () => void
+  isShuffled?: boolean
+  onToggleShuffle?: () => void
+  repeatMode?: 'off' | 'all' | 'one'
+  onToggleRepeat?: () => void
+  isMuted?: boolean
+  onToggleMute?: () => void
+  volume?: number
+  onVolumeChange?: (volume: number) => void
 }
 
 // Category-based gradient backgrounds
@@ -89,15 +97,19 @@ export function FullPlayer({
   onSeek,
   onClose,
   onNext,
-  onPrevious
+  onPrevious,
+  isShuffled = false,
+  onToggleShuffle,
+  repeatMode = 'off',
+  onToggleRepeat,
+  isMuted = false,
+  onToggleMute,
+  volume = 1,
+  onVolumeChange
 }: FullPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
   const [localProgress, setLocalProgress] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isShuffled, setIsShuffled] = useState(false)
-  const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off')
 
   const hasError = !!error
   const category = track?.category || 'default'
@@ -106,57 +118,31 @@ export function FullPlayer({
 
   // Get current track index in playlist
   const currentIndex = playlist.findIndex(t => t.id === track?.id)
-  const hasNext = currentIndex < playlist.length - 1
-  const hasPrevious = currentIndex > 0
+  const hasNext = currentIndex >= 0 && currentIndex < playlist.length - 1 && playlist.length > 1
+  const hasPrevious = currentIndex > 0 && playlist.length > 1
 
-  // Sync audio element with state
+  // Update local progress from currentTime prop
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !track) return
-
-    if (isPlaying) {
-      audio.play().catch(() => onPause())
-    } else {
-      audio.pause()
+    if (!isDragging && track) {
+      const progress = track.durationSeconds > 0 
+        ? (currentTime / track.durationSeconds) * 100 
+        : 0
+      setLocalProgress(isNaN(progress) ? 0 : progress)
     }
-  }, [isPlaying, onPause, track])
-
-  // Update audio src when track changes
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !track) return
-
-    audio.src = track.audioUrl
-    audio.load()
-    if (isPlaying) {
-      audio.play().catch(() => onPause())
-    }
-  }, [track?.audioUrl, track?.id])
-
-  // Handle time updates
-  const handleTimeUpdate = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio || isDragging) return
-    
-    const progress = (audio.currentTime / audio.duration) * 100
-    setLocalProgress(isNaN(progress) ? 0 : progress)
-    onSeek(audio.currentTime)
-  }, [isDragging, onSeek])
+  }, [currentTime, track, isDragging])
 
   // Handle progress bar interaction
   const handleProgressInteraction = useCallback((clientX: number) => {
-    const audio = audioRef.current
     const progressBar = progressRef.current
-    if (!audio || !progressBar) return
+    if (!progressBar || !track) return
 
     const rect = progressBar.getBoundingClientRect()
     const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const newTime = percentage * audio.duration
+    const newTime = percentage * track.durationSeconds
 
-    audio.currentTime = newTime
     setLocalProgress(percentage * 100)
     onSeek(newTime)
-  }, [onSeek])
+  }, [onSeek, track])
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     handleProgressInteraction(e.clientX)
@@ -170,42 +156,13 @@ export function FullPlayer({
     setIsDragging(false)
   }
 
-  // Handle audio end
-  const handleEnded = useCallback(() => {
-    if (repeatMode === 'one') {
-      const audio = audioRef.current
-      if (audio) {
-        audio.currentTime = 0
-        audio.play()
-      }
-    } else if (onNext && hasNext) {
-      onNext()
-    } else if (repeatMode === 'all' && onPrevious) {
-      // Go back to first track
-      // This is simplified - ideally would track first track
-    }
-  }, [repeatMode, onNext, hasNext, onPrevious])
+  // Handle audio end - this is handled by the AudioPlayer callbacks in dashboard-layout-client
+  // No need for separate handler here
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const toggleMute = () => {
-    const audio = audioRef.current
-    if (audio) {
-      audio.muted = !audio.muted
-      setIsMuted(!isMuted)
-    }
-  }
-
-  const toggleRepeat = () => {
-    setRepeatMode(prev => {
-      if (prev === 'off') return 'all'
-      if (prev === 'all') return 'one'
-      return 'off'
-    })
   }
 
   if (!isOpen || !track) return null
@@ -222,16 +179,10 @@ export function FullPlayer({
         "bg-gradient-to-b",
         gradient,
         "flex flex-col",
-        "overflow-hidden"
+        "overflow-hidden",
+        "safe-area-inset-top safe-area-inset-bottom"
       )}
       >
-        {/* Hidden audio element */}
-        <audio
-          ref={audioRef}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleEnded}
-        />
-
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
@@ -409,7 +360,7 @@ export function FullPlayer({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setIsShuffled(!isShuffled)}
+              onClick={onToggleShuffle}
               className={cn(
                 "p-2 rounded-full transition-colors",
                 isShuffled ? "text-white" : "text-white/50 hover:text-white"
@@ -421,19 +372,26 @@ export function FullPlayer({
 
             {/* Previous */}
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onPrevious}
-              disabled={!hasPrevious}
+              whileHover={hasPrevious && onPrevious ? { scale: 1.1 } : {}}
+              whileTap={hasPrevious && onPrevious ? { scale: 0.95 } : {}}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (onPrevious && hasPrevious) {
+                  onPrevious()
+                }
+              }}
+              disabled={!hasPrevious || !onPrevious}
               className={cn(
-                "p-3 rounded-full transition-colors",
-                hasPrevious 
-                  ? "text-white hover:bg-white/10" 
+                "p-3 rounded-full transition-colors touch-manipulation",
+                "min-w-[48px] min-h-[48px] flex items-center justify-center",
+                hasPrevious && onPrevious
+                  ? "text-white hover:bg-white/10 cursor-pointer" 
                   : "text-white/30 cursor-not-allowed"
               )}
               aria-label="Previous track"
             >
-              <SkipBack size={28} fill="currentColor" />
+              <SkipBack size={28} fill="currentColor" className="sm:w-7 sm:h-7" />
             </motion.button>
 
             {/* Play/Pause */}
@@ -443,7 +401,8 @@ export function FullPlayer({
               onClick={hasError ? undefined : (isPlaying ? onPause : onPlay)}
               disabled={hasError}
               className={cn(
-                "w-16 h-16 rounded-full flex items-center justify-center",
+                "w-20 h-20 sm:w-16 sm:h-16 rounded-full flex items-center justify-center touch-manipulation",
+                "min-w-[80px] min-h-[80px]",
                 hasError 
                   ? "bg-white/50 text-slate-500 cursor-not-allowed"
                   : "bg-white text-slate-900",
@@ -452,36 +411,43 @@ export function FullPlayer({
               aria-label={hasError ? "Audio unavailable" : (isPlaying ? "Pause" : "Play")}
             >
               {hasError ? (
-                <AlertCircle size={28} className="text-slate-500" />
+                <AlertCircle size={32} className="text-slate-500 sm:w-7 sm:h-7" />
               ) : isPlaying ? (
-                <Pause size={28} fill="currentColor" />
+                <Pause size={32} fill="currentColor" className="sm:w-7 sm:h-7" />
               ) : (
-                <Play size={28} fill="currentColor" className="ml-1" />
+                <Play size={32} fill="currentColor" className="ml-1 sm:w-7 sm:h-7" />
               )}
             </motion.button>
 
             {/* Next */}
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onNext}
-              disabled={!hasNext}
+              whileHover={hasNext && onNext ? { scale: 1.1 } : {}}
+              whileTap={hasNext && onNext ? { scale: 0.95 } : {}}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (onNext && hasNext) {
+                  onNext()
+                }
+              }}
+              disabled={!hasNext || !onNext}
               className={cn(
-                "p-3 rounded-full transition-colors",
-                hasNext 
-                  ? "text-white hover:bg-white/10" 
+                "p-3 rounded-full transition-colors touch-manipulation",
+                "min-w-[48px] min-h-[48px] flex items-center justify-center",
+                hasNext && onNext
+                  ? "text-white hover:bg-white/10 cursor-pointer" 
                   : "text-white/30 cursor-not-allowed"
               )}
               aria-label="Next track"
             >
-              <SkipForward size={28} fill="currentColor" />
+              <SkipForward size={28} fill="currentColor" className="sm:w-7 sm:h-7" />
             </motion.button>
 
             {/* Repeat */}
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={toggleRepeat}
+              onClick={onToggleRepeat}
               className={cn(
                 "p-2 rounded-full transition-colors relative",
                 repeatMode !== 'off' ? "text-white" : "text-white/50 hover:text-white"
@@ -501,7 +467,7 @@ export function FullPlayer({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={toggleMute}
+              onClick={onToggleMute}
               className="p-2 text-white/50 hover:text-white transition-colors"
               aria-label={isMuted ? "Unmute" : "Mute"}
             >

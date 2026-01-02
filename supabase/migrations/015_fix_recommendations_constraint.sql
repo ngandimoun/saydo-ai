@@ -10,3 +10,4 @@ ALTER TABLE health_recommendations
   ADD CONSTRAINT health_recommendations_type_check 
   CHECK (type IN ('food', 'drink', 'exercise', 'sleep', 'supplement', 'lifestyle'));
 
+

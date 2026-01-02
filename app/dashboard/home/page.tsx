@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Home } from "lucide-react"
 import { Header } from "@/components/dashboard/home/header"
@@ -10,12 +9,6 @@ import { UrgentAlerts } from "@/components/dashboard/home/urgent-alerts"
 import { QuickActions } from "@/components/dashboard/home/quick-actions"
 import { VoiceFeed } from "@/components/dashboard/home/voice-feed"
 import { TasksPreview } from "@/components/dashboard/home/tasks-preview"
-
-// Dynamically import ChatWidget to reduce initial bundle size
-const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
-  ssr: false,
-  loading: () => null
-})
 import type { UserProfile, UrgentAlert, VoiceNote, Task } from "@/lib/dashboard/types"
 import { springs } from "@/lib/motion-system"
 import { cn } from "@/lib/utils"
@@ -272,16 +265,6 @@ export default function HomePage() {
         <motion.div variants={itemVariants}>
           <GreetingSection 
             userProfile={userProfile} 
-            proSummary={todayStats.tasksCompletedToday > 0 || todayStats.voiceNotesToday > 0 ? {
-              text: todayStats.voiceNotesToday > 0 
-                ? `Processed ${todayStats.voiceNotesToday} voice note${todayStats.voiceNotesToday > 1 ? 's' : ''} and extracted actionable items.`
-                : "Your tasks are organized and ready.",
-              metric: `${todayStats.tasksCompletedToday} task${todayStats.tasksCompletedToday !== 1 ? 's' : ''} completed today`
-            } : undefined}
-            healthSummary={todayStats.insightsGenerated > 0 ? {
-              text: "I've analyzed your health data and generated personalized insights.",
-              metric: `${todayStats.insightsGenerated} insight${todayStats.insightsGenerated !== 1 ? 's' : ''} generated`
-            } : undefined}
           />
         </motion.div>
 
@@ -308,9 +291,6 @@ export default function HomePage() {
         <motion.div variants={itemVariants}>
           <VoiceFeed voiceNotes={voiceNotes} />
         </motion.div>
-
-        {/* Chat Widget */}
-        <ChatWidget pageContext={{ page: 'home' }} />
       </motion.div>
     </div>
   )

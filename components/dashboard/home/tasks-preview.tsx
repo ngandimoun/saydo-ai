@@ -11,6 +11,7 @@ import { formatSmartDateTime } from "@/lib/dashboard/time-utils"
 import { useProfile } from "@/hooks/queries"
 import type { Language } from "@/lib/dashboard/label-translations"
 import { sortTasksChronologically } from "@/lib/dashboard/task-sorting"
+import { prefetchTasksData } from "@/lib/prefetch-utils"
 
 /**
  * Tasks Preview Section - Airbnb-Inspired
@@ -75,6 +76,9 @@ export function TasksPreview({ tasks }: TasksPreviewProps) {
         </div>
         <Link 
           href="/dashboard/tasks"
+          prefetch={true}
+          onMouseEnter={() => prefetchTasksData().catch(console.error)}
+          onTouchStart={() => prefetchTasksData().catch(console.error)}
           className="text-xs text-primary font-medium flex items-center gap-1 hover:underline group"
         >
           View all

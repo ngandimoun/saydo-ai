@@ -147,7 +147,7 @@ export function createTranscriptionPreviewAgent(userContext: UserContext): Agent
     id: "transcription-preview-agent",
     name: "Transcription Preview",
     instructions: generateTranscriptionPreviewPrompt(userContext),
-    model: "openai/gpt-4o-mini", // Fast model for preview
+    model: "openai/gpt-5-nano-2025-08-07", // Fast model for preview
     tools: {
       outputPreview: outputPreviewTool,
     },
@@ -161,7 +161,7 @@ export const transcriptionPreviewAgent = new Agent({
   id: "transcription-preview-agent",
   name: "Transcription Preview",
   instructions: `You are a transcription preview specialist. Clean voice transcriptions and generate AI summaries. Use the output-preview tool to return results.`,
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5-nano-2025-08-07",
   tools: {
     outputPreview: outputPreviewTool,
   },

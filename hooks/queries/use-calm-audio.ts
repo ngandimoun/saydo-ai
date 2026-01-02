@@ -1,7 +1,7 @@
 /**
  * Query hook for calm audio content
  * 
- * Caches audio content by category with 1 hour stale time
+ * Caches audio content by genre with 1 hour stale time
  * (content changes infrequently).
  */
 
@@ -12,15 +12,15 @@ import type { AudioContent } from '@/lib/dashboard/types'
 const QUERY_KEY = ['calm-audio']
 
 interface UseCalmAudioOptions {
-  category?: string
+  genre?: string | null
 }
 
 async function fetchCalmAudio(options: UseCalmAudioOptions = {}): Promise<AudioContent[]> {
-  const { category } = options
+  const { genre } = options
   const manager = getCalmAudioManager()
   
-  // Load audio content from database
-  const content = await manager.getAudioContent(category === 'all' ? undefined : category)
+  // Load audio content from database - filter by genre tag if provided
+  const content = await manager.getAudioContent(genre || undefined)
   
   // Get streaming URLs for each audio file
   const contentWithUrls = await Promise.all(
@@ -51,6 +51,7 @@ export function useInvalidateCalmAudio() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: QUERY_KEY })
 }
+
 
 
 

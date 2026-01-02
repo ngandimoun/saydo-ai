@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { CheckSquare, Plus, Clock, Calendar, ChevronRight, FileText, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import type { Task, Reminder } from "@/lib/dashboard/types"
@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase"
 import { logger } from "@/lib/logger"
 import { useTasksRealtime, useRemindersRealtime } from "@/hooks/use-realtime"
 import { formatSmartDateTime } from "@/lib/dashboard/time-utils"
-import { useProfile } from "@/hooks/queries"
+import { useProfile, useTasks, useReminders, useInvalidateTasks, useInvalidateReminders } from "@/hooks/queries"
 import type { Language } from "@/lib/dashboard/label-translations"
 import { sortTasksChronologically, sortRemindersChronologically, getOverdueTasks, getOverdueReminders } from "@/lib/dashboard/task-sorting"
 import { SmartSuggestions } from "@/components/dashboard/tasks/smart-suggestions"
@@ -28,10 +28,6 @@ import { RescheduleDialog } from "@/components/dashboard/tasks/reschedule-dialog
 
 export default function TasksPage() {
   const [activeTab, setActiveTab] = useState<'todos' | 'reminders'>('todos')
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [reminders, setReminders] = useState<Reminder[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [newTaskIds, setNewTaskIds] = useState<Set<string>>(new Set())
   const [newReminderIds, setNewReminderIds] = useState<Set<string>>(new Set())
@@ -43,169 +39,86 @@ export default function TasksPage() {
   const { data: userProfile } = useProfile()
   const userLanguage = (userProfile?.language || 'en') as Language
   
-  // Track last refresh time to prevent duplicate refreshes
-  const lastRefreshTimeRef = useRef<number>(0)
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // Use React Query hooks for cached data
+  const { data: tasksData = [], isLoading: tasksLoading } = useTasks({ includeCompleted: false })
+  const { data: remindersData = [], isLoading: remindersLoading } = useReminders({ includeCompleted: false })
+  
+  // Apply smart chronological sorting
+  const tasks = sortTasksChronologically(tasksData)
+  const reminders = sortRemindersChronologically(remindersData)
+  
+  const isLoading = tasksLoading || remindersLoading
+  
+  // Get invalidate functions
+  const invalidateTasks = useInvalidateTasks()
+  const invalidateReminders = useInvalidateReminders()
+  
+  // Track previous data for detecting new items
+  const previousTasksRef = useRef<Task[]>([])
+  const previousRemindersRef = useRef<Reminder[]>([])
 
-  // Extract loadData into useCallback for reuse
-  const loadData = useCallback(async (showNotification = false) => {
-    // Debounce: prevent multiple rapid refreshes
-    const now = Date.now()
-    if (now - lastRefreshTimeRef.current < 1000) {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current)
-      }
-      refreshTimeoutRef.current = setTimeout(() => {
-        loadData(showNotification)
-      }, 1000 - (now - lastRefreshTimeRef.current))
-      return
-    }
-
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        setError("Please sign in to view your tasks")
-        setIsLoading(false)
-        return
-      }
-
-      setUserId(user.id)
-
-      // Fetch tasks from Supabase
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user.id)
-
-      if (tasksError) {
-        logger.error('Failed to fetch tasks', { error: tasksError })
-      } else if (tasksData) {
-        const newTasks = tasksData.map(t => ({
-          id: t.id,
-          userId: t.user_id,
-          title: t.title,
-          description: t.description,
-          priority: t.priority as Task['priority'],
-          status: t.status as Task['status'],
-          dueDate: t.due_date ? new Date(t.due_date) : undefined,
-          dueTime: t.due_time,
-          category: t.category,
-          tags: t.tags || [],
-          sourceRecordingId: t.source_recording_id,
-          createdAt: new Date(t.created_at),
-          completedAt: t.completed_at ? new Date(t.completed_at) : undefined,
-        }))
-
-        // Apply smart chronological sorting
-        const sortedTasks = sortTasksChronologically(newTasks)
-
-        // Detect new tasks
-        if (showNotification) {
-          setTasks(currentTasks => {
-            if (currentTasks.length > 0) {
-              const currentTaskIds = new Set(currentTasks.map(t => t.id))
-              const newlyAdded = sortedTasks.filter(t => !currentTaskIds.has(t.id))
-              if (newlyAdded.length > 0) {
-                setNewTaskIds(new Set(newlyAdded.map(t => t.id)))
-                // Clear highlight after 3 seconds
-                setTimeout(() => {
-                  setNewTaskIds(new Set())
-                }, 3000)
-              }
-            }
-            return sortedTasks
-          })
-        } else {
-          setTasks(sortedTasks)
+  // Get user ID for realtime subscriptions
+  useEffect(() => {
+    const getUserId = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setUserId(user.id)
         }
+      } catch (error) {
+        logger.debug('Error getting user for realtime subscriptions', { error })
       }
-
-      // Fetch reminders from Supabase
-      const { data: remindersData, error: remindersError } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_completed', false)
-
-      if (remindersError) {
-        logger.error('Failed to fetch reminders', { error: remindersError })
-      } else if (remindersData) {
-        const newReminders = remindersData.map(r => ({
-          id: r.id,
-          userId: r.user_id,
-          title: r.title,
-          description: r.description,
-          reminderTime: new Date(r.reminder_time),
-          isRecurring: r.is_recurring,
-          recurrencePattern: r.recurrence_pattern,
-          isCompleted: r.is_completed,
-          isSnoozed: r.is_snoozed,
-          snoozeUntil: r.snooze_until ? new Date(r.snooze_until) : undefined,
-          tags: r.tags || [],
-          priority: r.priority || 'medium',
-          type: r.type || 'reminder',
-          sourceRecordingId: r.source_recording_id,
-          createdAt: new Date(r.created_at),
-        }))
-
-        // Apply smart chronological sorting
-        const sortedReminders = sortRemindersChronologically(newReminders)
-
-        // Detect new reminders
-        if (showNotification) {
-          setReminders(currentReminders => {
-            if (currentReminders.length > 0) {
-              const currentReminderIds = new Set(currentReminders.map(r => r.id))
-              const newlyAdded = sortedReminders.filter(r => !currentReminderIds.has(r.id))
-              if (newlyAdded.length > 0) {
-                setNewReminderIds(new Set(newlyAdded.map(r => r.id)))
-                // Clear highlight after 3 seconds
-                setTimeout(() => {
-                  setNewReminderIds(new Set())
-                }, 3000)
-              }
-            }
-            return sortedReminders
-          })
-        } else {
-          setReminders(sortedReminders)
-        }
-      }
-    } catch (err) {
-      logger.error('Failed to load tasks page data', { error: err })
-      setError("Failed to load tasks")
     }
-    
-    setIsLoading(false)
-    lastRefreshTimeRef.current = Date.now()
+    getUserId()
   }, [])
 
-  // Initial load
+  // Detect new tasks and reminders when data changes
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (previousTasksRef.current.length > 0 && tasks.length > 0) {
+      const currentTaskIds = new Set(previousTasksRef.current.map(t => t.id))
+      const newlyAdded = tasks.filter(t => !currentTaskIds.has(t.id))
+      if (newlyAdded.length > 0) {
+        setNewTaskIds(new Set(newlyAdded.map(t => t.id)))
+        // Clear highlight after 3 seconds
+        setTimeout(() => {
+          setNewTaskIds(new Set())
+        }, 3000)
+      }
+    }
+    previousTasksRef.current = tasks
+  }, [tasks])
+
+  useEffect(() => {
+    if (previousRemindersRef.current.length > 0 && reminders.length > 0) {
+      const currentReminderIds = new Set(previousRemindersRef.current.map(r => r.id))
+      const newlyAdded = reminders.filter(r => !currentReminderIds.has(r.id))
+      if (newlyAdded.length > 0) {
+        setNewReminderIds(new Set(newlyAdded.map(r => r.id)))
+        // Clear highlight after 3 seconds
+        setTimeout(() => {
+          setNewReminderIds(new Set())
+        }, 3000)
+      }
+    }
+    previousRemindersRef.current = reminders
+  }, [reminders])
 
   // Listen for storage events to refresh when voice processing completes
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'voice-processing-complete' || e.key === 'tasks-updated') {
         console.log('[TasksPage] Refresh triggered by storage event', { key: e.key })
-        loadData(true)
+        invalidateTasks()
+        invalidateReminders()
       }
     }
 
     // Listen for same-tab localStorage changes
     const handleLocalStorageChange = (e: Event) => {
-      const customEvent = e as CustomEvent
-      if (customEvent.detail) {
-        console.log('[TasksPage] Refresh triggered by custom event', customEvent.detail)
-        loadData(true)
-      } else {
-        console.log('[TasksPage] Refresh triggered by custom event')
-        loadData(true)
-      }
+      console.log('[TasksPage] Refresh triggered by custom event')
+      invalidateTasks()
+      invalidateReminders()
     }
     
     window.addEventListener('storage', handleStorageChange)
@@ -221,7 +134,8 @@ export default function TasksPage() {
         // If update was within last 5 seconds, refresh
         if (now - lastUpdateTime < 5000) {
           console.log('[TasksPage] Refresh triggered by localStorage poll')
-          loadData(true)
+          invalidateTasks()
+          invalidateReminders()
           // Clear the flag to avoid repeated refreshes
           localStorage.removeItem('tasks-updated')
         }
@@ -233,24 +147,15 @@ export default function TasksPage() {
       window.removeEventListener('voice-processing-complete', handleLocalStorageChange)
       window.removeEventListener('tasks-updated', handleLocalStorageChange)
       clearInterval(pollInterval)
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current)
-      }
     }
-  }, [loadData])
+  }, [invalidateTasks, invalidateReminders])
 
   // Subscribe to realtime task updates
   useTasksRealtime(
     userId || '',
     (task) => {
       logger.info('[TasksPage] Task updated via realtime', { task })
-      // Debounce realtime updates
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current)
-      }
-      refreshTimeoutRef.current = setTimeout(() => {
-        loadData(true)
-      }, 500)
+      invalidateTasks()
     },
     !!userId
   )
@@ -260,13 +165,7 @@ export default function TasksPage() {
     userId || '',
     (reminder) => {
       logger.info('[TasksPage] Reminder updated via realtime', { reminder })
-      // Debounce realtime updates
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current)
-      }
-      refreshTimeoutRef.current = setTimeout(() => {
-        loadData(true)
-      }, 500)
+      invalidateReminders()
     },
     !!userId
   )
@@ -275,18 +174,6 @@ export default function TasksPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen px-4">
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <CheckSquare size={28} className="text-muted-foreground" />
-        </div>
-        <p className="text-foreground mb-2">{error}</p>
-        <p className="text-sm text-muted-foreground">Try refreshing the page</p>
       </div>
     )
   }
@@ -301,11 +188,24 @@ export default function TasksPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="px-4 pt-6 pb-8 space-y-6 max-w-lg mx-auto"
-    >
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Ambient Background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-500/8 via-teal-500/5 to-transparent pointer-events-none" />
+      
+      {/* Subtle grid pattern */}
+      <div 
+        className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+          backgroundSize: '24px 24px'
+        }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="relative px-4 pt-6 pb-8 space-y-6 max-w-lg mx-auto"
+      >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -377,27 +277,27 @@ export default function TasksPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: 'complete', taskIds: overdueTasks.map(t => t.id) })
             })
-            if (response.ok) {
-              loadData(true)
-            }
-          } catch (error) {
-            console.error('Failed to mark all as done:', error)
-          }
-          
-          if (overdueReminders.length > 0) {
-            try {
-              const response = await fetch('/api/reminders/bulk', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'complete', reminderIds: overdueReminders.map(r => r.id) })
-              })
               if (response.ok) {
-                loadData(true)
+                invalidateTasks()
               }
             } catch (error) {
-              console.error('Failed to mark reminders as done:', error)
+              console.error('Failed to mark all as done:', error)
             }
-          }
+            
+            if (overdueReminders.length > 0) {
+              try {
+                const response = await fetch('/api/reminders/bulk', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'complete', reminderIds: overdueReminders.map(r => r.id) })
+                })
+                if (response.ok) {
+                  invalidateReminders()
+                }
+              } catch (error) {
+                console.error('Failed to mark reminders as done:', error)
+              }
+            }
         }}
         onRescheduleAll={() => {
           setRescheduleType(activeTab === 'todos' ? 'task' : 'reminder')
@@ -740,7 +640,7 @@ export default function TasksPage() {
               })
               if (response.ok) {
                 setSelectedTaskIds(new Set())
-                loadData(true)
+                invalidateTasks()
               }
             } catch (error) {
               console.error('Failed to mark tasks as done:', error)
@@ -762,7 +662,7 @@ export default function TasksPage() {
               })
               if (response.ok) {
                 setSelectedTaskIds(new Set())
-                loadData(true)
+                invalidateTasks()
               }
             } catch (error) {
               console.error('Failed to dismiss tasks:', error)
@@ -788,7 +688,7 @@ export default function TasksPage() {
               })
               if (response.ok) {
                 setSelectedReminderIds(new Set())
-                loadData(true)
+                invalidateReminders()
               }
             } catch (error) {
               console.error('Failed to mark reminders as done:', error)
@@ -810,7 +710,7 @@ export default function TasksPage() {
               })
               if (response.ok) {
                 setSelectedReminderIds(new Set())
-                loadData(true)
+                invalidateReminders()
               }
             } catch (error) {
               console.error('Failed to dismiss reminders:', error)
@@ -842,7 +742,7 @@ export default function TasksPage() {
                 })
                 if (response.ok) {
                   setSelectedTaskIds(new Set())
-                  loadData(true)
+                  invalidateTasks()
                 }
               } else {
                 const ids = Array.from(selectedReminderIds.size > 0 ? selectedReminderIds : getOverdueReminders(reminders).map(r => r.id))
@@ -864,7 +764,7 @@ export default function TasksPage() {
                 })
                 if (response.ok) {
                   setSelectedReminderIds(new Set())
-                  loadData(true)
+                  invalidateReminders()
                 } else {
                   const errorData = await response.json().catch(() => ({}))
                   console.error('Failed to reschedule reminders:', errorData)
@@ -879,7 +779,8 @@ export default function TasksPage() {
           type={rescheduleType}
         />
       )}
-    </motion.div>
+      </motion.div>
+    </div>
   )
 }
 

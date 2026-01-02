@@ -16,6 +16,8 @@ import { createClient } from "@/lib/supabase"
 import type { UserProfile } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
+import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
+import { useUnreadNotificationCount } from "@/hooks/queries/use-pro-data"
 
 /**
  * Dashboard Header - Airbnb-Inspired
@@ -33,6 +35,7 @@ interface HeaderProps {
 
 export function Header({ userProfile }: HeaderProps) {
   const router = useRouter()
+  const [notificationOpen, setNotificationOpen] = useState(false)
   const today = new Date()
   const dateString = today.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -40,8 +43,8 @@ export function Header({ userProfile }: HeaderProps) {
     day: 'numeric'
   })
 
-  // Mock notification count - TODO: Fetch from backend
-  const notificationCount = 3
+  // Real notification count from backend
+  const notificationCount = useUnreadNotificationCount()
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -74,10 +77,16 @@ export function Header({ userProfile }: HeaderProps) {
       {/* Actions */}
       <div className="flex items-center gap-2">
         {/* Notifications */}
+        <NotificationCenter 
+          isOpen={notificationOpen}
+          onOpenChange={setNotificationOpen}
+          showButton={false}
+        />
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           transition={springs.snappy}
+          onClick={() => setNotificationOpen(!notificationOpen)}
           className={cn(
             "relative w-10 h-10 rounded-full",
             "bg-card border border-border",

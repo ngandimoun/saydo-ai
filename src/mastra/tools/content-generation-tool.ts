@@ -13,6 +13,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { getUserIdFromContext } from "./utils";
 
 // Create Supabase client for server-side operations
 function getSupabaseClient() {
@@ -95,9 +96,9 @@ export const createAIDocumentTool = createTool({
  */
 export const getAIDocumentsTool = createTool({
   id: "get-ai-documents",
-  description: "Fetches AI-generated documents for a user with optional filters",
+  description: "Fetches AI-generated documents for a user with optional filters. NOTE: userId is automatically provided - you don't need to pass it.",
   inputSchema: z.object({
-    userId: z.string().describe("User ID"),
+    userId: z.string().optional().describe("User ID (automatically provided - do not pass this parameter)"),
     documentType: z.string().optional().describe("Filter by document type"),
     status: z.enum(["generating", "ready", "failed", "archived"]).optional().describe("Filter by status"),
     generationType: z.enum(["explicit", "proactive", "suggestion"]).optional().describe("Filter by generation type"),
@@ -122,13 +123,37 @@ export const getAIDocumentsTool = createTool({
     total: z.number(),
     error: z.string().optional(),
   }),
-  execute: async (input) => {
+  execute: async (input, context?) => {
+    console.log("[getAIDocumentsTool] Executing", {
+      inputUserId: input.userId,
+      documentType: input.documentType,
+      status: input.status,
+      generationType: input.generationType,
+      limit: input.limit,
+      offset: input.offset,
+      hasContext: !!context,
+    });
+
+    // Validate and get userId from context
+    const actualUserId = getUserIdFromContext(input.userId, context);
+    
+    console.log("[getAIDocumentsTool] Using userId", {
+      userId: actualUserId,
+      filters: {
+        documentType: input.documentType,
+        status: input.status,
+        generationType: input.generationType,
+        limit: input.limit,
+        offset: input.offset,
+      },
+    });
+
     const supabase = getSupabaseClient();
 
     let query = supabase
       .from("ai_documents")
       .select("*", { count: "exact" })
-      .eq("user_id", input.userId)
+      .eq("user_id", actualUserId)
       .order("generated_at", { ascending: false })
       .range(input.offset, input.offset + input.limit - 1);
 
@@ -145,7 +170,10 @@ export const getAIDocumentsTool = createTool({
     const { data, error, count } = await query;
 
     if (error) {
-      console.error("[getAIDocumentsTool] Error:", error);
+      console.error("[getAIDocumentsTool] Database error", {
+        userId: actualUserId,
+        error: error.message,
+      });
       return { success: false, documents: [], total: 0, error: error.message };
     }
 
@@ -162,6 +190,14 @@ export const getAIDocumentsTool = createTool({
       confidenceScore: doc.confidence_score,
       generatedAt: doc.generated_at,
     }));
+
+    console.log("[getAIDocumentsTool] Returning documents", {
+      userId: actualUserId,
+      count: documents.length,
+      total: count || 0,
+      documentTypes: documents.map(d => d.documentType),
+      statuses: documents.map(d => d.status),
+    });
 
     return { success: true, documents, total: count || 0 };
   },
@@ -281,9 +317,9 @@ export const archiveAIDocumentTool = createTool({
  */
 export const getAIDocumentByIdTool = createTool({
   id: "get-ai-document-by-id",
-  description: "Fetches a single AI-generated document by ID",
+  description: "Fetches a single AI-generated document by ID. NOTE: userId is automatically provided - you don't need to pass it.",
   inputSchema: z.object({
-    userId: z.string().describe("User ID (for verification)"),
+    userId: z.string().optional().describe("User ID (automatically provided - do not pass this parameter)"),
     documentId: z.string().describe("Document ID"),
   }),
   outputSchema: z.object({
@@ -308,14 +344,17 @@ export const getAIDocumentByIdTool = createTool({
     }).optional(),
     error: z.string().optional(),
   }),
-  execute: async (input) => {
+  execute: async (input, context?) => {
+    // Validate and get userId from context
+    const actualUserId = getUserIdFromContext(input.userId, context);
+    
     const supabase = getSupabaseClient();
 
     const { data, error } = await supabase
       .from("ai_documents")
       .select("*")
       .eq("id", input.documentId)
-      .eq("user_id", input.userId)
+      .eq("user_id", actualUserId)
       .single();
 
     if (error) {
@@ -406,6 +445,7 @@ export const contentGenerationTools = {
   archiveAIDocument: archiveAIDocumentTool,
   getAIDocumentById: getAIDocumentByIdTool,
 };
+
 
 
 

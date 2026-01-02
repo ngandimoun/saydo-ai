@@ -286,7 +286,7 @@ export async function createContentAgent(
     id: "dynamic-content-agent",
     name: "Dynamic Content Agent",
     instructions,
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5-mini-2025-08-07",
     tools: {
       outputGeneratedContent: outputGeneratedContentTool,
     },
@@ -414,7 +414,7 @@ export const contentAgent = new Agent({
   instructions: `You are a professional content creator that generates high-quality content.
 Adapt your output format based on the content type requested.
 Use the output-generated-content tool to return structured content.`,
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5-mini-2025-08-07",
   tools: {
     outputGeneratedContent: outputGeneratedContentTool,
   },

@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { getUserIdFromContext } from "./utils";
 
 // Task priority and status enums matching lib/dashboard/types.ts
 const TaskPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
@@ -25,7 +26,7 @@ function getSupabaseClient() {
 
 /**
  * Tool to create a new task for the user.
- * Can be used by agents to create tasks from voice commands or chat.
+ * Can be used by agents to create tasks from voice commands.
  */
 export const createTaskTool = createTool({
   id: "create-task",
@@ -176,9 +177,9 @@ export const createTaskTool = createTool({
 export const getTasksTool = createTool({
   id: "get-tasks",
   description:
-    "Fetches the user's tasks with optional filtering by status, priority, or category.",
+    "Fetches the user's tasks with optional filtering by status, priority, or category. NOTE: userId is automatically provided - you don't need to pass it.",
   inputSchema: z.object({
-    userId: z.string().describe("The user's unique identifier"),
+    userId: z.string().optional().describe("User ID (automatically provided - do not pass this parameter)"),
     status: TaskStatusSchema.optional().describe("Filter by task status"),
     priority: TaskPrioritySchema.optional().describe("Filter by priority"),
     category: z.string().optional().describe("Filter by category"),
@@ -213,14 +214,32 @@ export const getTasksTool = createTool({
     category,
     includeCompleted,
     limit,
-  }) => {
+  }, context?) => {
     try {
+      console.log("[getTasksTool] Executing", {
+        inputUserId: userId,
+        status,
+        priority,
+        category,
+        includeCompleted,
+        limit,
+        hasContext: !!context,
+      });
+
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
+      console.log("[getTasksTool] Using userId", {
+        userId: actualUserId,
+        filters: { status, priority, category, includeCompleted, limit },
+      });
+
       const supabase = getSupabaseClient();
 
       let query = supabase
         .from("tasks")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -243,10 +262,14 @@ export const getTasksTool = createTool({
       const { data, error } = await query;
 
       if (error) {
+        console.error("[getTasksTool] Database error", {
+          userId: actualUserId,
+          error: error.message,
+        });
         return { tasks: [], error: error.message };
       }
 
-      return {
+      const result = {
         tasks: (data || []).map((task) => ({
           id: task.id,
           title: task.title,

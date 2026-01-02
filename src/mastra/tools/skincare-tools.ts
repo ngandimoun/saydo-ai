@@ -126,7 +126,7 @@ Address ${userContext.preferredName} by name in your analysis.
 Return JSON.`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -242,7 +242,7 @@ Address ${userContext.preferredName} by name.
 Return JSON.`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -366,7 +366,7 @@ Address ${userContext.preferredName} by name.
 Return JSON with routine structure.`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5-nano-2025-08-07",
         messages: [
           { role: "system", content: "You are a skincare expert. Return valid JSON." },
           { role: "user", content: prompt },
@@ -457,7 +457,7 @@ Check:
 Return JSON with compatibility status, warnings, and recommendations.`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5-nano-2025-08-07",
         messages: [
           { role: "system", content: "You are a skincare chemist. Return valid JSON." },
           { role: "user", content: prompt },
@@ -549,7 +549,7 @@ Address ${userContext.preferredName} by name.
 Return JSON array.`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5-nano-2025-08-07",
         messages: [
           { role: "system", content: "You are a skincare expert. Return valid JSON." },
           { role: "user", content: prompt },
@@ -713,5 +713,6 @@ export const logSkincareRoutineTool = createTool({
     }
   },
 });
+
 
 

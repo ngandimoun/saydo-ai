@@ -159,7 +159,7 @@ CRITICAL: Check all ingredients against user allergies: ${userProfile.allergies.
 If ANY allergen is detected, it MUST be in allergyWarnings and healthScore should be reduced.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -263,7 +263,7 @@ Provide a JSON response with:
 Read the Supplement Facts label carefully. Check ingredients against user allergies.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -373,7 +373,7 @@ Provide a JSON response with:
 Consider hydration impact, sugar content, and caffeine levels.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -529,7 +529,7 @@ Status guidelines:
 
       console.log("[analyzeLabResultsTool] Calling OpenAI API");
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -686,7 +686,7 @@ Provide a JSON response with:
 Check for interactions with the user's supplements. Flag any allergens.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",
@@ -785,7 +785,7 @@ Provide a JSON response with:
 }`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         messages: [
           {
             role: "user",

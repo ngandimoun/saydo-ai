@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, Upload, FileText, ChevronRight, Sparkles, Loader2 } from "lucide-react"
 import type { 
@@ -12,10 +11,7 @@ import { InterventionList } from "@/components/dashboard/health/intervention-lis
 import { HealthUploadModal } from "@/components/dashboard/health/health-upload"
 import { FoodAnalysisModal } from "@/components/dashboard/health/food-analysis-modal"
 // Gamification Components
-import { HealthScoreCard } from "@/components/dashboard/health/health-score-card"
-import { StreakCounter } from "@/components/dashboard/health/streak-counter"
 import { AchievementsPanel } from "@/components/dashboard/health/achievements-panel"
-import { DailyChallenges } from "@/components/dashboard/health/daily-challenges"
 // Skincare Component - Simplified
 import { SkincareCard } from "@/components/dashboard/health/skincare/skincare-card"
 // New Cumulative Health Dashboard
@@ -25,12 +21,6 @@ import { RecommendationsSection } from "@/components/dashboard/health/recommenda
 import { MealPlanSection } from "@/components/dashboard/health/meal-plan-section"
 // Notifications
 import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
-
-// Dynamically import ChatWidget to reduce initial bundle size
-const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
-  ssr: false,
-  loading: () => null
-})
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
 import { createClient } from "@/lib/supabase"
@@ -231,17 +221,6 @@ export default function HealthPage() {
           <MealPlanSection />
         </motion.div>
 
-        {/* Daily Progress - Now secondary */}
-        <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
-          <HealthScoreCard />
-          <StreakCounter />
-        </motion.div>
-
-        {/* Daily Challenges */}
-        <motion.div variants={itemVariants}>
-          <DailyChallenges />
-        </motion.div>
-
         {/* Proactive Interventions */}
         <AnimatePresence>
           {interventions.filter(i => !i.isDismissed).length > 0 && (
@@ -357,9 +336,6 @@ export default function HealthPage() {
             setFoodAnalysis(null)
           }}
         />
-
-        {/* Chat Widget */}
-        <ChatWidget pageContext={{ page: 'health' }} />
       </motion.div>
     </div>
   )

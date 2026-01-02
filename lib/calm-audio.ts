@@ -17,15 +17,23 @@ export class CalmAudioManager {
 
   /**
    * Get all audio content from database
+   * For Suno-generated content, join with suno_music_files to get fresh cover URLs
+   * 
+   * @param genre - Optional genre tag to filter by (e.g., 'jazz', 'blues', 'ambient')
    */
-  async getAudioContent(category?: string): Promise<AudioContent[]> {
+  async getAudioContent(genre?: string): Promise<AudioContent[]> {
+    // Simplified query - just get audio_content directly
+    // The thumbnail_url is already set in audio_content from suno_music_files
     let query = this.supabase
       .from('audio_content')
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (category && category !== 'all') {
-      query = query.eq('category', category)
+    // Filter by genre tag if provided
+    if (genre) {
+      // Use PostgreSQL array contains operator to filter by tag
+      // The contains method checks if the tags array contains the genre value
+      query = query.contains('tags', [genre])
     }
 
     const { data, error } = await query
@@ -34,7 +42,7 @@ export class CalmAudioManager {
       throw new Error(`Failed to fetch audio content: ${error.message}`)
     }
 
-    return (data || []).map((item) => ({
+    return (data || []).map((item: any) => ({
       id: item.id,
       title: item.title,
       description: item.description,
@@ -132,6 +140,7 @@ export function getCalmAudioManager(): CalmAudioManager {
   }
   return managerInstance
 }
+
 
 
 

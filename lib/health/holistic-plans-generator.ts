@@ -172,7 +172,7 @@ Make recommendations specific to their actual findings. Don't give generic advic
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Use smaller model for cost efficiency
+      model: "gpt-5-nano-2025-08-07", // Use smaller model for cost efficiency
       messages: [
         { role: "system", content: `You are a holistic health advisor creating personalized plans based on clinical findings. ALWAYS respond in ${languageName}.` },
         { role: "user", content: prompt },

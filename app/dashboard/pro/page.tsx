@@ -1,18 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Briefcase, TrendingUp, Clock, FileText, Sparkles, Calendar, CheckCircle2, ArrowRight, Plus, Mic, FolderUp } from "lucide-react"
 import { FileVault } from "@/components/dashboard/pro/file-vault"
 import { AIOutputs } from "@/components/dashboard/pro/ai-outputs"
 import { DailySummary } from "@/components/dashboard/pro/daily-summary"
-
-// Dynamically import ChatWidget to reduce initial bundle size
-const ChatWidget = dynamic(() => import("@/components/dashboard/chat").then(mod => ({ default: mod.ChatWidget })), {
-  ssr: false,
-  loading: () => null
-})
 import type { WorkFile, AIDocument, EndOfDaySummary, Reminder } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
@@ -424,9 +417,6 @@ export default function ProPage() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Chat Widget */}
-        <ChatWidget pageContext={{ page: 'pro' }} />
       </motion.div>
     </div>
   )

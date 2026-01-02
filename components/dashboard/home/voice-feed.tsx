@@ -9,6 +9,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { springs, staggerContainer, staggerItem, fadeInUp } from "@/lib/motion-system"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
+import { prefetchVoiceTimelineData } from "@/lib/prefetch-utils"
 
 /**
  * Voice Feed - Airbnb-Inspired
@@ -56,6 +57,9 @@ export function VoiceFeed({ voiceNotes }: VoiceFeedProps) {
         </div>
         <Link 
           href="/dashboard/voice"
+          prefetch={true}
+          onMouseEnter={() => prefetchVoiceTimelineData().catch(console.error)}
+          onTouchStart={() => prefetchVoiceTimelineData().catch(console.error)}
           className="text-xs text-primary font-medium flex items-center gap-1 hover:underline group"
         >
           View timeline

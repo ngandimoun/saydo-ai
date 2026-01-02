@@ -13,9 +13,10 @@ import { ProfessionStep } from "@/components/onboarding/steps/profession-step"
 import { InformationDietStep } from "@/components/onboarding/steps/information-diet-step"
 import { EssentialsStep } from "@/components/onboarding/steps/essentials-step"
 import { HealthStep } from "@/components/onboarding/steps/health-step"
+import { NotificationSettings } from "@/components/dashboard/notifications/notification-settings"
 import type { OnboardingData } from "@/components/onboarding/onboarding-form"
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 7
 
 interface PreferencesFormProps {
   initialData: OnboardingData
@@ -209,6 +210,8 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
         return true // Optional step
       case 6:
         return formData.healthInterests.length > 0
+      case 7:
+        return true // Optional notification settings
       default:
         return false
     }
@@ -287,6 +290,16 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
               updateData={updateFormData}
             />
           )}
+          {currentStep === 7 && (
+            <motion.div
+              key="notifications"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <NotificationSettings />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -341,6 +354,7 @@ export function PreferencesForm({ initialData }: PreferencesFormProps) {
     </div>
   )
 }
+
 
 
 

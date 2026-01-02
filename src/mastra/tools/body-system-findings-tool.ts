@@ -211,7 +211,7 @@ Respond with JSON array:
 Extract ALL relevant findings. Be comprehensive and ALWAYS give specific, actionable advice with real examples.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // Use smaller model for cost efficiency
+        model: "gpt-5-nano-2025-08-07", // Use smaller model for cost efficiency
         messages: [
           { role: "system", content: `You are a health analyst extracting findings from medical data and explaining them clearly to non-medical users. ALWAYS respond in ${languageName}.` },
           { role: "user", content: extractionPrompt },

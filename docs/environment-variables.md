@@ -38,6 +38,12 @@ This document describes all environment variables required for the Saydo applica
 |----------|-------------|
 | `OPENWEATHER_API_KEY` | OpenWeatherMap API key for UV index, weather, and air quality data |
 
+### Suno API (Music Generation)
+
+| Variable | Description |
+|----------|-------------|
+| `SUNO_API_KEY` | Suno API key for AI music generation (get from https://sunoapi.org/api-key) |
+
 ## Setup Instructions
 
 1. Copy your environment variables to `.env.local`:
@@ -55,6 +61,9 @@ This document describes all environment variables required for the Saydo applica
 
    # OpenAI
    OPENAI_API_KEY=sk-your-openai-key
+   
+   # Suno API (Music Generation)
+   SUNO_API_KEY=your-suno-api-key
    ```
 
 3. Restart your development server for changes to take effect.
@@ -65,6 +74,13 @@ The Mastra AI system uses these environment variables:
 
 - **`OPENAI_API_KEY`**: Powers all AI agents (Saydo, Voice, Task, Health) and OpenAI Whisper transcription
 - **`SUPABASE_SERVICE_ROLE_KEY`**: Required for server-side database operations (fetching user profiles, creating tasks, storing health insights)
+
+## Suno API Features
+
+The Suno API integration uses these environment variables:
+
+- **`SUNO_API_KEY`**: Required for AI music generation, processing, and file management. Used by the calm session music automation workflow.
+- **`SUPABASE_SERVICE_ROLE_KEY`**: Required for downloading and storing generated music files to Supabase Storage with auto-refresh URLs.
 
 ## Security Notes
 

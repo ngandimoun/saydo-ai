@@ -70,7 +70,7 @@ export interface SummaryContext {
 
 /**
  * Creates a summary agent for generating daily productivity summaries
- * Uses gpt-4o-mini for cost efficiency
+ * Uses gpt-5-nano-2025-08-07 for cost efficiency
  */
 export function createSummaryAgent(userContext: UserContext): Agent {
   const languageName = LANGUAGE_NAMES[userContext.language] || "English";
@@ -117,7 +117,7 @@ Generate only the summary text in ${languageName}. No additional commentary, no 
     id: "summary-agent",
     name: "Daily Summary Generator",
     instructions,
-    model: "openai/gpt-4o-mini",
+    model: "openai/gpt-5-nano-2025-08-07",
   });
 }
 
@@ -128,7 +128,7 @@ export const summaryAgent = new Agent({
   id: "summary-agent",
   name: "Daily Summary Generator",
   instructions: `You are a daily productivity summary generator. Generate brief, encouraging summaries in the user's language.`,
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5-nano-2025-08-07",
 });
 
 /**
@@ -186,6 +186,7 @@ ${statsText || "No activity recorded yet"}`;
     return "Ready to make today productive? Let's get started!";
   }
 }
+
 
 
 

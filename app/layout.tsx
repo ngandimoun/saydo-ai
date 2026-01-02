@@ -3,6 +3,7 @@ import { Outfit, Plus_Jakarta_Sans, Playfair_Display, Geist_Mono } from "next/fo
 import { ThemeProvider } from "@/components/theme-provider";
 import { GSAPProvider } from "@/lib/gsap-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ChatProvider } from "@/components/chat/chat-provider";
 import "./globals.css";
 
 // Display font - Modern, friendly headlines
@@ -80,6 +81,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
@@ -94,9 +96,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <GSAPProvider>
-              {children}
-            </GSAPProvider>
+            <ChatProvider>
+              <GSAPProvider>
+                {children}
+              </GSAPProvider>
+            </ChatProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

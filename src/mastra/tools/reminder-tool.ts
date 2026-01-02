@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { getUserIdFromContext } from "./utils";
 
 // Reminder priority and type enums
 const ReminderPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
@@ -254,9 +255,9 @@ export const createReminderTool = createTool({
 export const getRemindersTool = createTool({
   id: "get-reminders",
   description:
-    "Fetches the user's reminders with optional filtering by priority, type, or tags.",
+    "Fetches the user's reminders with optional filtering by priority, type, or tags. NOTE: userId is automatically provided - you don't need to pass it.",
   inputSchema: z.object({
-    userId: z.string().describe("The user's unique identifier"),
+    userId: z.string().optional().describe("User ID (automatically provided - do not pass this parameter)"),
     priority: ReminderPrioritySchema.optional().describe("Filter by priority"),
     type: ReminderTypeSchema.optional().describe("Filter by type"),
     includeCompleted: z
@@ -285,14 +286,17 @@ export const getRemindersTool = createTool({
     ),
     error: z.string().optional(),
   }),
-  execute: async ({ userId, priority, type, includeCompleted, limit }) => {
+  execute: async ({ userId, priority, type, includeCompleted, limit }, context?) => {
     try {
+      // Validate and get userId from context
+      const actualUserId = getUserIdFromContext(userId, context);
+      
       const supabase = getSupabaseClient();
 
       let query = supabase
         .from("reminders")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", actualUserId)
         .order("reminder_time", { ascending: true })
         .limit(limit);
 

@@ -268,19 +268,19 @@ export const getEnvironmentDataTool = createTool({
 });
 
 /**
- * Tool to log a health note from voice or chat.
+ * Tool to log a health note from voice input.
  * Health notes are free-form observations about the user's health.
  */
 export const createHealthNoteTool = createTool({
   id: "create-health-note",
   description:
-    "Creates a health note from user's voice or chat input. Use this when user mentions something about their health, symptoms, or wellness.",
+    "Creates a health note from user's voice input. Use this when user mentions something about their health, symptoms, or wellness.",
   inputSchema: z.object({
     userId: z.string().describe("The user's unique identifier"),
     content: z.string().describe("The health note content"),
     source: z
-      .enum(["voice", "chat", "manual"])
-      .default("chat")
+      .enum(["voice", "manual"])
+      .default("voice")
       .describe("Source of the note"),
     sourceRecordingId: z
       .string()

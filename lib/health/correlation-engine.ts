@@ -45,7 +45,7 @@ function getOpenAIClient(): OpenAI {
 }
 
 /**
- * Translate text using gpt-4o-mini
+ * Translate text using gpt-5-nano-2025-08-07
  */
 async function translateText(text: string, targetLanguage: string): Promise<string> {
   if (targetLanguage === "en") return text;
@@ -55,7 +55,7 @@ async function translateText(text: string, targetLanguage: string): Promise<stri
   
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-nano-2025-08-07",
       messages: [
         { 
           role: "system", 
