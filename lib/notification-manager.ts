@@ -77,28 +77,50 @@ export async function showNotification(options: NotificationOptions): Promise<No
     // Use service worker for better PWA experience
     const registration = await navigator.serviceWorker.ready
     
-    return await registration.showNotification(options.title, {
+    const notification = await registration.showNotification(options.title, {
       body: options.body,
       icon: options.icon || "/icon-192.png",
       badge: options.badge || "/icon-192.png",
       tag: options.tag,
-      data: options.data || {},
+      data: { ...(options.data || {}), playSound: !options.silent },
       requireInteraction: options.requireInteraction || false,
       silent: options.silent || false,
       actions: options.actions,
       vibrate: options.requireInteraction ? [200, 100, 200] : undefined,
     })
+    
+    // Play sound if not silent (service worker will also send message, but play directly as backup)
+    if (!options.silent) {
+      import("@/lib/notification-sound").then(({ playNotificationSound }) => {
+        playNotificationSound().catch(() => {
+          // Ignore errors - sound is optional
+        });
+      });
+    }
+    
+    return notification
   } catch (error) {
     console.error("[showNotification] Error:", error)
     
     // Fallback to basic Notification API
     try {
-      return new Notification(options.title, {
+      const notification = new Notification(options.title, {
         body: options.body,
         icon: options.icon || "/icon-192.png",
         tag: options.tag,
         data: options.data,
       })
+      
+      // Play sound for fallback notifications too (if not silent)
+      if (!options.silent) {
+        import("@/lib/notification-sound").then(({ playNotificationSound }) => {
+          playNotificationSound().catch(() => {
+            // Ignore errors - sound is optional
+          });
+        });
+      }
+      
+      return notification
     } catch (fallbackError) {
       console.error("[showNotification] Fallback error:", fallbackError)
       return null

@@ -500,6 +500,11 @@ export function setupServiceWorkerMessageHandler() {
         }
       }
     } 
+    // Handle notification sound playback request
+    else if (event.data?.type === 'PLAY_NOTIFICATION_SOUND') {
+      const { playNotificationSound } = await import('@/lib/notification-sound')
+      await playNotificationSound()
+    }
     // Handle job completion notification from service worker
     else if (event.data?.type === 'VOICE_JOB_COMPLETE') {
       const { jobId, result } = event.data

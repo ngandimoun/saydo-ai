@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
+import { extractVibrantColors, type ColorPalette } from "@/lib/color-extraction"
 
 /**
  * Full Screen Audio Player - Spotify-Inspired
@@ -110,11 +111,102 @@ export function FullPlayer({
   const progressRef = useRef<HTMLDivElement>(null)
   const [localProgress, setLocalProgress] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [extractedColors, setExtractedColors] = useState<ColorPalette | null>(null)
+  const [isExtractingColors, setIsExtractingColors] = useState(false)
 
   const hasError = !!error
   const category = track?.category || 'default'
-  const gradient = hasError ? 'from-slate-700 via-slate-800 to-slate-900' : (categoryGradients[category] || categoryGradients.default)
-  const accent = hasError ? 'bg-slate-500' : (categoryAccents[category] || categoryAccents.default)
+  
+  // Extract colors from album cover when track changes
+  useEffect(() => {
+    if (!track?.thumbnailUrl || hasError) {
+      setExtractedColors(null)
+      return
+    }
+
+    let cancelled = false
+    setIsExtractingColors(true)
+
+    extractVibrantColors(track.thumbnailUrl)
+      .then((palette) => {
+        if (!cancelled && palette) {
+          setExtractedColors(palette)
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to extract colors:', error)
+        if (!cancelled) {
+          setExtractedColors(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsExtractingColors(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [track?.thumbnailUrl, hasError])
+
+  // Determine gradient and accent colors
+  const getGradientStyle = (): React.CSSProperties | undefined => {
+    if (hasError) {
+      return undefined // Use default error gradient classes
+    }
+    
+    if (extractedColors) {
+      return {
+        background: `linear-gradient(to bottom, ${extractedColors.primary}, ${extractedColors.secondary}, ${extractedColors.tertiary})`
+      }
+    }
+    
+    return undefined // Use category-based gradient classes
+  }
+
+  const getGradientClasses = (): string => {
+    if (hasError) {
+      return 'from-slate-700 via-slate-800 to-slate-900'
+    }
+    
+    if (extractedColors) {
+      return '' // Use inline styles instead
+    }
+    
+    return categoryGradients[category] || categoryGradients.default
+  }
+
+  const getAccentStyle = (): React.CSSProperties | undefined => {
+    if (hasError) {
+      return undefined // Use default error accent class
+    }
+    
+    if (extractedColors) {
+      return {
+        backgroundColor: extractedColors.accent
+      }
+    }
+    
+    return undefined // Use category-based accent class
+  }
+
+  const getAccentClasses = (): string => {
+    if (hasError) {
+      return 'bg-slate-500'
+    }
+    
+    if (extractedColors) {
+      return '' // Use inline styles instead
+    }
+    
+    return categoryAccents[category] || categoryAccents.default
+  }
+
+  const gradient = getGradientClasses()
+  const accent = getAccentClasses()
+  const gradientStyle = getGradientStyle()
+  const accentStyle = getAccentStyle()
 
   // Get current track index in playlist
   const currentIndex = playlist.findIndex(t => t.id === track?.id)
@@ -174,14 +266,18 @@ export function FullPlayer({
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-      className={cn(
-        "fixed inset-0 z-50",
-        "bg-gradient-to-b",
-        gradient,
-        "flex flex-col",
-        "overflow-hidden",
-        "safe-area-inset-top safe-area-inset-bottom"
-      )}
+        className={cn(
+          "fixed inset-0 z-50",
+          !gradientStyle && "bg-gradient-to-b",
+          !gradientStyle && gradient,
+          "flex flex-col",
+          "overflow-hidden",
+          "safe-area-inset-top safe-area-inset-bottom"
+        )}
+        style={{
+          ...gradientStyle,
+          transition: gradientStyle ? 'background 0.8s ease-in-out' : undefined
+        }}
       >
         {/* Header */}
         <motion.div 
@@ -256,6 +352,10 @@ export function FullPlayer({
                         <motion.div
                           key={i}
                           className={cn("w-2 rounded-full", accent)}
+                          style={{
+                            ...accentStyle,
+                            transition: accentStyle ? 'background-color 0.8s ease-in-out' : undefined
+                          }}
                           animate={{
                             height: [16, 40 + Math.random() * 24, 16],
                           }}
@@ -325,7 +425,11 @@ export function FullPlayer({
             {/* Progress fill */}
             <motion.div 
               className={cn("absolute inset-y-0 left-0 rounded-full", accent)}
-              style={{ width: `${localProgress}%` }}
+              style={{ 
+                width: `${localProgress}%`,
+                ...accentStyle,
+                transition: accentStyle ? 'background-color 0.8s ease-in-out' : undefined
+              }}
             />
             
             {/* Drag handle */}

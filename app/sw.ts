@@ -23,7 +23,9 @@ const serwist = new Serwist({
   runtimeCaching: defaultCache,
   // Cache audio files for offline playback
   additionalPrecacheEntries: [
-    // Add any static audio files here if needed
+    // Notification sound file
+    { url: "/sounds/notification.mp3", revision: "1" },
+    { url: "/sounds/notification.ogg", revision: "1" },
   ],
 });
 
@@ -107,18 +109,50 @@ self.addEventListener("push", (event: PushEvent) => {
   }
 
   // Show notification
+  const showNotificationPromise = self.registration.showNotification(notificationData.title, {
+    body: notificationData.body,
+    icon: notificationData.icon,
+    badge: notificationData.badge,
+    tag: notificationData.tag,
+    data: notificationData.data,
+    requireInteraction: notificationData.requireInteraction,
+    vibrate: notificationData.requireInteraction ? [200, 100, 200] : undefined,
+  });
+
+  // Send sound playback message to all clients
+  const playSoundPromise = playNotificationSound(notificationData.data?.playSound !== false);
+
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      data: notificationData.data,
-      requireInteraction: notificationData.requireInteraction,
-      vibrate: notificationData.requireInteraction ? [200, 100, 200] : undefined,
-    })
+    Promise.all([showNotificationPromise, playSoundPromise])
   );
 });
+
+/**
+ * Play notification sound by sending message to all clients
+ * Service workers can't directly use Audio API, so we send a message to clients
+ */
+async function playNotificationSound(shouldPlay: boolean = true): Promise<void> {
+  if (!shouldPlay) {
+    return;
+  }
+
+  try {
+    const clients = await self.clients.matchAll({
+      includeUncontrolled: true,
+      type: "window",
+    });
+
+    // Send message to all clients to play sound
+    clients.forEach((client) => {
+      client.postMessage({
+        type: "PLAY_NOTIFICATION_SOUND",
+        soundUrl: "/sounds/notification.mp3", // Fallback to .ogg if .mp3 not available
+      });
+    });
+  } catch (error) {
+    console.error("[Service Worker] Error sending sound playback message:", error);
+  }
+}
 
 // Handle notification clicks
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
@@ -302,7 +336,7 @@ async function handleVoiceProcessingSync(syncTag: string): Promise<void> {
       body = `Created ${items.join(" and ")}`;
     }
 
-    await self.registration.showNotification("Voice Processing Complete", {
+    const showNotificationPromise = self.registration.showNotification("Voice Processing Complete", {
       body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
@@ -315,6 +349,9 @@ async function handleVoiceProcessingSync(syncTag: string): Promise<void> {
       },
       requireInteraction: false,
     });
+
+    // Play notification sound
+    await Promise.all([showNotificationPromise, playNotificationSound(true)]);
   } catch (error) {
     console.error("[Service Worker] Voice processing sync failed:", error);
 

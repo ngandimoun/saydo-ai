@@ -7,6 +7,7 @@ export interface ChatMessage {
   id: string
   role: "user" | "assistant"
   content: string
+  image_urls?: string[] | null
   created_at: string
 }
 
@@ -24,7 +25,7 @@ interface ChatContextType {
   isLoading: boolean
   currentConversationId: string | null
   conversations: ChatConversation[]
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, imageUrls?: string[]) => Promise<void>
   loadConversation: (conversationId: string) => Promise<void>
   createNewConversation: () => Promise<void>
   loadConversations: () => Promise<void>
@@ -197,8 +198,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [supabase, loadConversation, createNewConversation])
 
   // Send message
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return
+  const sendMessage = useCallback(async (content: string, imageUrls?: string[]) => {
+    if ((!content.trim() && !imageUrls?.length) || isLoading) return
 
     // Ensure we have a conversation
     let conversationId = currentConversationId
@@ -219,7 +220,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMessage: ChatMessage = {
       id: `temp-${Date.now()}`,
       role: "user",
-      content: content.trim(),
+      content: content.trim() || (imageUrls?.length ? "Sent images" : ""),
+      image_urls: imageUrls || null,
       created_at: new Date().toISOString(),
     }
     setMessages((prev) => [...prev, userMessage])
@@ -233,7 +235,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({
           conversationId,
-          message: content.trim(),
+          message: content.trim() || "",
+          imageUrls: imageUrls || [],
         }),
       })
 

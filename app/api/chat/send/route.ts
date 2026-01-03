@@ -1,7 +1,17 @@
 import { createClient } from "@/lib/supabase-server"
 import { createSaydoAgent } from "@/src/mastra/agents/saydo-agent"
 import { getUserContext } from "@/src/mastra/tools/user-profile-tool"
+import { convertToDataUrls } from "@/lib/chat-images"
+import OpenAI from "openai"
 import { NextRequest } from "next/server"
+
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY environment variable is required")
+  }
+  return new OpenAI({ apiKey })
+}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -29,9 +39,10 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json()
-    const { conversationId, message } = body as {
+    const { conversationId, message, imageUrls } = body as {
       conversationId: string
       message: string
+      imageUrls?: string[]
     }
 
     if (!message || typeof message !== "string" || !message.trim()) {
@@ -85,27 +96,82 @@ export async function POST(request: NextRequest) {
         .join("\n\n")
     }
 
-    // Create saydo agent with user context
-    const agent = createSaydoAgent(userContext)
-
     // Build prompt with conversation history
     const prompt = conversationContext
       ? `Previous conversation:\n\n${conversationContext}\n\nUser: ${message.trim()}\n\nAssistant:`
       : `${message.trim()}`
 
-    // Generate response
-    const response = await agent.generate(prompt)
+    let assistantResponse: string
 
-    // Extract response text
-    const assistantResponse = response.text || "I'm sorry, I couldn't generate a response. Please try again."
+    // If images are present, use OpenAI Vision API directly
+    if (imageUrls && imageUrls.length > 0) {
+      try {
+        // Convert image URLs to base64 data URLs
+        const imageDataUrls = await convertToDataUrls(imageUrls)
 
-    // Save user message to database
+        // Build multi-modal content
+        const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+          { type: "text", text: prompt },
+          ...imageDataUrls.map((dataUrl) => ({
+            type: "image_url" as const,
+            image_url: { url: dataUrl, detail: "high" as const },
+          })),
+        ]
+
+        // Get user context summary for the prompt
+        const userContextSummary = `User: ${userContext.preferredName}
+Language: ${userContext.language}
+${userContext.profession ? `Profession: ${userContext.profession.name}` : ""}
+${userContext.allergies.length > 0 ? `Allergies: ${userContext.allergies.join(", ")}` : ""}`
+
+        const enhancedPrompt = `${userContextSummary}\n\n${prompt}`
+
+        // Call OpenAI directly with vision support
+        const openai = getOpenAIClient()
+        const visionResponse = await openai.chat.completions.create({
+          model: "gpt-5-mini-2025-08-07",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: enhancedPrompt },
+                ...imageDataUrls.map((dataUrl) => ({
+                  type: "image_url" as const,
+                  image_url: { url: dataUrl, detail: "high" as const },
+                })),
+              ],
+            },
+          ],
+          max_tokens: 2000,
+        })
+
+        assistantResponse =
+          visionResponse.choices[0]?.message?.content ||
+          "I'm sorry, I couldn't generate a response. Please try again."
+      } catch (error) {
+        console.error("[chat/send] Vision API error:", error)
+        // Fallback to text-only if vision fails
+        const agent = createSaydoAgent(userContext)
+        const response = await agent.generate(prompt)
+        assistantResponse =
+          response.text || "I'm sorry, I couldn't generate a response. Please try again."
+      }
+    } else {
+      // No images, use regular agent
+      const agent = createSaydoAgent(userContext)
+      const response = await agent.generate(prompt)
+      assistantResponse =
+        response.text || "I'm sorry, I couldn't generate a response. Please try again."
+    }
+
+    // Save user message to database (with image URLs if present)
     const { data: userMessage, error: userMsgError } = await supabase
       .from("chat_messages")
       .insert({
         conversation_id: conversationId,
         role: "user",
         content: message.trim(),
+        image_urls: imageUrls && imageUrls.length > 0 ? imageUrls : null,
       })
       .select()
       .single()
@@ -151,12 +217,14 @@ export async function POST(request: NextRequest) {
           id: string
           role: "user"
           content: string
+          image_urls: string[] | null
           created_at: string
         },
         assistantMessage: assistantMessage as {
           id: string
           role: "assistant"
           content: string
+          image_urls: string[] | null
           created_at: string
         },
       }),

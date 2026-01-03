@@ -412,9 +412,18 @@ export async function showLocalNotification(
       icon: options?.icon || "/icon-192x192.png",
       badge: options?.badge || "/badge-72x72.png",
       tag: options?.tag,
-      data: options?.data,
+      data: { ...options?.data, playSound: true },
       requireInteraction: options?.requireInteraction || false,
     });
+    
+    // Play sound (service worker will also send message, but play directly as backup)
+    if (options?.data?.playSound !== false) {
+      const { playNotificationSound } = await import("@/lib/notification-sound");
+      playNotificationSound().catch(() => {
+        // Ignore errors - sound is optional
+      });
+    }
+    
     return true;
   } catch (error) {
     console.error("[showLocalNotification] Error:", error);
@@ -427,6 +436,15 @@ export async function showLocalNotification(
         tag: options?.tag,
         data: options?.data,
       });
+      
+      // Play sound for fallback notifications too
+      if (options?.data?.playSound !== false) {
+        const { playNotificationSound } = await import("@/lib/notification-sound");
+        playNotificationSound().catch(() => {
+          // Ignore errors - sound is optional
+        });
+      }
+      
       return true;
     } catch {
       return false;
