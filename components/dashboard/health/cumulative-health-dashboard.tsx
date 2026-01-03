@@ -13,7 +13,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useHealthProfile, useHealthSystemsSummary } from "@/hooks/queries/use-health-profile";
+import { useHealthProfile, useHealthSystemsSummary, type BodySystemData } from "@/hooks/queries/use-health-profile";
 import { BodySystemCard } from "./body-system-card";
 import { CorrelationInsights } from "./correlation-insights";
 import { EvolutionComparison } from "./evolution-comparison";
@@ -30,25 +30,31 @@ interface StatusSummary {
 
 /**
  * Calculate status summary from systems
+ * Counts individual findings by their status, not systems by overallStatus
  */
 function calculateStatusSummary(
-  bodySystems: Record<string, { overallStatus: string; findingCount: number }>
+  bodySystems: Record<string, BodySystemData>
 ): StatusSummary {
   const summary: StatusSummary = { good: 0, attention: 0, concern: 0, total: 0 };
 
+  // Iterate through all systems and count findings by their individual status
   for (const system of Object.values(bodySystems)) {
-    switch (system.overallStatus) {
-      case "good":
-        summary.good++;
-        break;
-      case "attention":
-        summary.attention++;
-        break;
-      case "concern":
-        summary.concern++;
-        break;
+    // Count each finding by its individual status
+    for (const finding of system.currentFindings) {
+      switch (finding.status) {
+        case "good":
+          summary.good++;
+          break;
+        case "attention":
+          summary.attention++;
+          break;
+        case "concern":
+          summary.concern++;
+          break;
+        // "info" status findings are not counted in these metrics
+      }
+      summary.total++;
     }
-    summary.total += system.findingCount;
   }
 
   return summary;
@@ -97,11 +103,17 @@ function HealthOverviewStats({
   statusSummary,
   systemCount,
   correlationCount,
+  totalFindings,
 }: {
   statusSummary: StatusSummary;
   systemCount: number;
   correlationCount: number;
+  totalFindings: number;
 }) {
+  // Use correlations if available, otherwise show total findings as fallback
+  const insightsValue = correlationCount > 0 ? correlationCount : totalFindings;
+  const insightsLabel = correlationCount > 0 ? "Insights" : "Findings";
+
   return (
     <div className="grid grid-cols-4 gap-3">
       {/* Systems tracked */}
@@ -139,7 +151,7 @@ function HealthOverviewStats({
         <p className="text-[10px] text-muted-foreground">Attention</p>
       </motion.div>
 
-      {/* Insights */}
+      {/* Insights / Findings */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -147,8 +159,8 @@ function HealthOverviewStats({
         className="p-3 rounded-xl bg-purple-500/10 text-center"
       >
         <Sparkles size={18} className="mx-auto text-purple-500 mb-1" />
-        <p className="text-lg font-bold text-purple-500">{correlationCount}</p>
-        <p className="text-[10px] text-muted-foreground">Insights</p>
+        <p className="text-lg font-bold text-purple-500">{insightsValue}</p>
+        <p className="text-[10px] text-muted-foreground">{insightsLabel}</p>
       </motion.div>
     </div>
   );
@@ -243,6 +255,7 @@ export function CumulativeHealthDashboard({
         statusSummary={statusSummary}
         systemCount={systemCount}
         correlationCount={correlations.length}
+        totalFindings={totalFindings}
       />
 
       {/* Cross-System Correlations */}

@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
         hasFinalResult: !!finalResult,
         finalResultStatus: finalResult?.status,
         finalResultKeys: finalResult ? Object.keys(finalResult) : [],
-        allStepResults: stepResults.map((sr, idx) => ({
+        allStepResults: Object.values(steps).map((sr: any, idx) => ({
           index: idx,
           status: sr.status,
           hasOutput: !!sr.output,

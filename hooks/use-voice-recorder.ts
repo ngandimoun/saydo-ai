@@ -51,6 +51,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
   const [processingResult, setProcessingResult] = useState<VoiceProcessingResult | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const recorderRef = useRef<ReturnType<typeof getVoiceRecorder> | null>(null)
+  const isCancelledRef = useRef(false)
+  const currentRecordingIdRef = useRef<string | null>(null)
 
   const autoProcess = options.autoProcess ?? true
 
@@ -214,6 +216,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
       setError(null)
       setIsProcessing(false)
       setProcessingResult(null)
+      isCancelledRef.current = false
+      currentRecordingIdRef.current = null
 
       const recordingOptions: RecordingOptions = {
         maxDuration: options.maxDuration || 1800,
@@ -226,6 +230,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
       }
 
       await recorderRef.current.startRecording(recordingOptions)
+      currentRecordingIdRef.current = recorderRef.current.getRecordingId()
       setIsRecording(true)
       logger.info('Voice recording started')
     } catch (err) {
@@ -243,8 +248,17 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
     try {
       setIsRecording(false)
       setIsProcessing(true)
+      isCancelledRef.current = false
       
       const result = await recorderRef.current.stopRecording()
+      
+      // Check if cancelled during stop
+      if (isCancelledRef.current) {
+        logger.info('Recording cancelled during stop')
+        setIsProcessing(false)
+        setDuration(0)
+        return
+      }
       
       if (result && autoProcess) {
         // Upload is complete (promise resolved), now get preview (fast - just transcription + summary)
@@ -253,8 +267,25 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
           audioUrl: result.audioUrl 
         })
         
+        // Check again if cancelled before processing
+        if (isCancelledRef.current) {
+          logger.info('Recording cancelled before preview')
+          setIsProcessing(false)
+          setDuration(0)
+          return
+        }
+        
         // Use preview endpoint (lightweight - no item extraction yet)
         const previewResult = await getPreview(result.recordingId)
+        
+        // Final check if cancelled during preview
+        if (isCancelledRef.current) {
+          logger.info('Recording cancelled during preview')
+          setIsProcessing(false)
+          setDuration(0)
+          return
+        }
+        
         setProcessingResult(previewResult)
         
         setIsProcessing(false)
@@ -286,7 +317,27 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
   }, [options, autoProcess, getPreview])
 
   const getRecordingId = useCallback(() => {
-    return recorderRef.current?.getRecordingId() || null
+    return recorderRef.current?.getRecordingId() || currentRecordingIdRef.current
+  }, [])
+
+  const cancelRecording = useCallback(() => {
+    isCancelledRef.current = true
+    
+    // Stop recording if still recording
+    if (recorderRef.current?.isRecording()) {
+      recorderRef.current.stopRecording().catch((error) => {
+        logger.error('Failed to stop recording during cancel', { error })
+      })
+    }
+    
+    // Reset states
+    setIsRecording(false)
+    setIsProcessing(false)
+    setDuration(0)
+    setProcessingResult(null)
+    currentRecordingIdRef.current = null
+    
+    logger.info('Recording cancelled')
   }, [])
 
   return {
@@ -297,6 +348,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}) {
     error,
     startRecording,
     stopRecording,
+    cancelRecording,
     getRecordingId,
     getPreview, // Get transcription + summary (lightweight)
     processRecording, // Extract items + save (heavy) - called when user clicks "Done"

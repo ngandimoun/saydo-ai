@@ -335,15 +335,62 @@ When the user says ANY of these generation verbs followed by a content type, you
 
 ## EXTRACTION RULES
 
-### Tasks
-Extract any actionable items the user mentions wanting to do:
-- "I need to..." → Task
-- "tomorrow I need to..." → Task with due date (tomorrow) + tags
-- "I should..." → Task
-- "Don't forget to..." → Task
-- Work-related items for a ${context.profession?.name || "professional"} → Categorize as 'work' + add work tags
-- **Task titles must be in ${languageName}**
-- Auto-tag tasks based on content (e.g., "hospital" → health tags, "meeting" → work tags)
+### Tasks - Comprehensive Multi-Language Detection
+
+**CRITICAL: Extract ANY actionable item the user mentions, regardless of language or task type.**
+
+Tasks include work tasks, grocery lists, shopping lists, personal todos, household chores, errands, appointments, and any other actionable items.
+
+**Multi-Language Task Detection Patterns:**
+
+**Work Tasks:**
+- **French**: "j'ai un travail à faire", "je dois travailler", "réunion", "rendez-vous professionnel", "travail avec collègues", "projet à terminer", "je dois finir", "j'ai une réunion", "travail important"
+- **Spanish**: "tengo trabajo que hacer", "reunión", "trabajo con colegas", "proyecto", "tengo que trabajar", "trabajo importante"
+- **German**: "ich habe Arbeit zu tun", "Besprechung", "Arbeit mit Kollegen", "Projekt", "ich muss arbeiten", "wichtige Arbeit"
+- **Portuguese**: "tenho trabalho para fazer", "reunião", "trabalho com colegas", "projeto", "preciso trabalhar"
+- **Arabic**: "لدي عمل للقيام به", "اجتماع", "عمل مع زملاء", "مشروع"
+- **English**: "I have work to do", "meeting", "work with colleagues", "project", "I need to work"
+
+**Grocery/Shopping Tasks:**
+- **French**: "acheter", "faire les courses", "liste de courses", "aller au supermarché", "acheter du lait", "faire les achats", "je dois acheter", "courses à faire"
+- **Spanish**: "comprar", "hacer la compra", "lista de compras", "ir al supermercado", "comprar leche", "tengo que comprar"
+- **German**: "einkaufen", "Einkaufsliste", "zum Supermarkt gehen", "Milch kaufen", "ich muss einkaufen"
+- **Portuguese**: "comprar", "fazer compras", "lista de compras", "ir ao supermercado", "preciso comprar"
+- **Arabic**: "شراء", "قائمة التسوق", "الذهاب إلى السوق", "شراء الحليب"
+- **English**: "buy", "grocery shopping", "shopping list", "go to supermarket", "buy milk"
+
+**Personal/Todo Tasks:**
+- **French**: "je dois", "il faut que je", "je vais", "j'ai besoin de", "n'oublie pas de", "pense à", "à faire", "je dois faire", "il faut faire"
+- **Spanish**: "tengo que", "necesito", "debo", "voy a", "no olvides", "por hacer", "tengo que hacer"
+- **German**: "ich muss", "ich sollte", "ich werde", "vergiss nicht", "zu tun", "ich muss tun"
+- **Portuguese**: "preciso", "tenho que", "vou fazer", "não esqueça", "para fazer"
+- **Arabic**: "يجب أن", "أحتاج إلى", "لا تنس", "للقيام به"
+- **English**: "I need to", "I should", "I must", "don't forget", "to do", "I have to"
+
+**General Actionable Items:**
+- Any phrase indicating something needs to be done
+- Any mention of "to-do", "todo", "à faire", "por hacer", "zu tun", "للقيام به"
+- Time-bound activities (evening, morning, specific dates, "ce soir", "demain", "mañana", "morgen")
+- Appointments, meetings, errands, chores, calls, visits
+
+**Task Type/Category Detection (Automatic):**
+- **Work**: Mentions of "travail", "work", "réunion", "meeting", "projet", "colleagues", "boss", "office", "bureau", "trabajo", "Arbeit"
+- **Grocery/Shopping**: Mentions of "courses", "shopping", "supermarket", "store", "buy", "acheter", "comprar", "einkaufen", food items, "lait", "milk", "leche"
+- **Health**: Mentions of "doctor", "appointment", "medication", "hospital", "health", "médecin", "rendez-vous médical"
+- **Personal**: General todos, personal errands, household tasks, "appeler", "call", "llamar"
+- **Family**: Mentions of "family", "maman", "papa", "kids", "children", "famille", "familia"
+- **Finance**: Mentions of "bill", "payment", "bank", "money", "facture", "paiement"
+
+**Smart Tagging:**
+- Auto-generate relevant tags based on content IN ${languageName}
+- Use language-appropriate tags (French tags for French tasks, Spanish tags for Spanish tasks)
+- Include context tags (time of day, urgency indicators, task type)
+- Examples:
+  - Work task in French → tags: ["travail", "réunion", "important"]
+  - Grocery task in Spanish → tags: ["compras", "supermercado", "alimentos"]
+  - Personal task in German → tags: ["persönlich", "erledigen"]
+
+**Task titles must be in ${languageName}**
 
 ### Priority Detection
 - Urgent words: "urgent", "ASAP", "immediately", "right now", "emergency" → urgent
@@ -351,32 +398,90 @@ Extract any actionable items the user mentions wanting to do:
 - Low priority: "whenever", "no rush", "eventually", "if possible" → low
 - Default: medium
 
-### Due Dates and Times - CRITICAL
-Parse relative dates using the CURRENT DATE (${currentDate}) and CURRENT TIME (${currentTime}) as reference:
-- "today" or "tonight" → ${currentDate}
-- "tomorrow" → ${tomorrowDate}
-- "next week" → ${nextWeekDate}
+### AI-Based Smart Time Parsing for Tasks (No Regex - Pure LLM Understanding)
+
+**CRITICAL: Use your natural language understanding to parse times intelligently. Do NOT rely on pattern matching - understand context and meaning.**
+
+**Time Parsing Principles:**
+- Understand context: "ce soir" (tonight) means evening (18:00-22:00), "demain matin" (tomorrow morning) means morning (08:00-12:00)
+- Extract both dueDate (YYYY-MM-DD) and dueTime (HH:MM) when time is mentioned or can be inferred
+- Handle time ranges intelligently:
+  - Morning = 08:00-12:00 (default 09:00)
+  - Afternoon = 14:00-17:00 (default 15:00)
+  - Evening = 18:00-22:00 (default 19:00)
+  - Night = 20:00-23:00 (default 21:00)
+- Support ALL languages the user might speak
+- No regex - pure AI understanding of natural language expressions
+
+**Multi-Language Time Expressions (Examples - Use AI Understanding):**
+
+**French:**
+- "ce soir" (tonight) → ${currentDate}, dueTime: "19:00" (evening inferred)
+- "demain matin" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00" (morning inferred)
+- "demain après-midi" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00" (afternoon inferred)
+- "dans 3 jours" (in 3 days) → Calculate 3 days from ${currentDate}
+- "la semaine prochaine" (next week) → Calculate next week
+- "lundi prochain" (next Monday) → Calculate next Monday
+- "à 15h" (at 3pm) → Extract time as "15:00"
+- "à 15h30" (at 3:30pm) → Extract time as "15:30"
+- "ce soir à 20h" (tonight at 8pm) → ${currentDate}, dueTime: "20:00"
+
+**Spanish:**
+- "esta noche" (tonight) → ${currentDate}, dueTime: "19:00"
+- "mañana por la mañana" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00"
+- "mañana por la tarde" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00"
+- "en 3 días" (in 3 days) → Calculate 3 days from ${currentDate}
+- "la próxima semana" (next week) → Calculate next week
+- "el próximo lunes" (next Monday) → Calculate next Monday
+- "a las 15:00" (at 3pm) → Extract time as "15:00"
+
+**German:**
+- "heute Abend" (tonight) → ${currentDate}, dueTime: "19:00"
+- "morgen früh" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00"
+- "morgen Nachmittag" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00"
+- "in 3 Tagen" (in 3 days) → Calculate 3 days from ${currentDate}
+- "nächste Woche" (next week) → Calculate next week
+- "nächsten Montag" (next Monday) → Calculate next Monday
+- "um 15 Uhr" (at 3pm) → Extract time as "15:00"
+- "übermorgen" (day after tomorrow) → Calculate 2 days from ${currentDate}
+
+**Portuguese:**
+- "esta noite" (tonight) → ${currentDate}, dueTime: "19:00"
+- "amanhã de manhã" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00"
+- "amanhã à tarde" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00"
+- "em 3 dias" (in 3 days) → Calculate 3 days from ${currentDate}
+
+**Arabic:**
+- "هذه الليلة" (tonight) → ${currentDate}, dueTime: "19:00"
+- "غداً صباحاً" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00"
+- "بعد 3 أيام" (in 3 days) → Calculate 3 days from ${currentDate}
+
+**English:**
+- "tonight" → ${currentDate}, dueTime: "19:00"
+- "tomorrow morning" → ${tomorrowDate}, dueTime: "09:00"
+- "tomorrow afternoon" → ${tomorrowDate}, dueTime: "15:00"
 - "in 3 days" → Calculate 3 days from ${currentDate}
-- "Monday" → Next Monday from ${currentDate}
-- Specific dates → parse as mentioned, but ensure they are in the future relative to ${currentDate}
+- "next week" → Calculate next week
+- "next Monday" → Calculate next Monday
+- "at 3pm" → Extract time as "15:00"
+- "at 2:30 PM" → Extract time as "14:30"
+
+**Time Extraction Rules:**
+- **ALWAYS populate dueTime field when a specific time is mentioned OR can be inferred from context**
+- **dueTime must be in 24-hour format (HH:MM)** - e.g., "15:00" not "3pm", "09:00" not "9am"
 - **ALWAYS use ISO format (YYYY-MM-DD) for dates**
 - **NEVER use dates from the past - always calculate from ${currentDate}**
+- When time is ambiguous (e.g., "ce soir" without specific hour), infer reasonable time based on context:
+  - Evening tasks → 19:00 (default evening time)
+  - Morning tasks → 09:00 (default morning time)
+  - Afternoon tasks → 15:00 (default afternoon time)
 
-**TIME EXTRACTION - YOU MUST extract specific times mentioned:**
-- If user says "match at 3pm": Extract dueDate as the current date (${currentDate}) and dueTime as "15:00" (24-hour format)
-- If user says "appointment tomorrow at 2:30": Extract dueDate as tomorrow's date (${tomorrowDate}) and dueTime as "14:30"
-- If user says "meeting in 2 hours": Calculate exact time from current time (${currentTime}) and set dueTime in HH:MM format
-- If user says "match at 15:00": Extract dueTime as "15:00" directly
-- If user says "at 2:30 PM": Convert to 24-hour format: dueTime as "14:30"
-- If user says "at 9:00 AM": Convert to 24-hour format: dueTime as "09:00"
-- **ALWAYS populate dueTime field when a specific time is mentioned** - this is critical for task scheduling
-- **dueTime must be in 24-hour format (HH:MM)** - e.g., "15:00" not "3pm", "09:00" not "9am"
-- Examples:
-  - "match at 3pm": dueTime should be "15:00"
-  - "appointment at 9:30 AM": dueTime should be "09:30"
-  - "meeting at 14:00": dueTime should be "14:00"
-  - "football match tomorrow at 2pm": dueDate should be tomorrow's date (${tomorrowDate}), dueTime should be "14:00"
-  - "hospital visit today at 10:00": dueDate should be today's date (${currentDate}), dueTime should be "10:00"
+**Examples of Smart Time Parsing:**
+- "Ce soir, j'ai un travail à faire" → dueDate: ${currentDate}, dueTime: "19:00" (evening work inferred)
+- "Demain, je dois faire les courses" → dueDate: ${tomorrowDate}, dueTime: "10:00" (morning shopping inferred)
+- "Tengo que llamar a mi mamá mañana por la tarde" → dueDate: ${tomorrowDate}, dueTime: "15:00" (afternoon call inferred)
+- "Ich habe morgen eine Besprechung um 14 Uhr" → dueDate: ${tomorrowDate}, dueTime: "14:00" (explicit time)
+- "I have work to do tomorrow at 2pm" → dueDate: ${tomorrowDate}, dueTime: "14:00" (explicit time)
 
 ### Reminders
 Separate time-based reminders from tasks intelligently:

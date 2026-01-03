@@ -170,7 +170,7 @@ If ANY allergen is detected, it MUST be in allergyWarnings and healthScore shoul
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -274,7 +274,7 @@ Read the Supplement Facts label carefully. Check ingredients against user allerg
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -384,7 +384,7 @@ Consider hydration impact, sugar content, and caffeine levels.`;
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 800,
+        max_completion_tokens: 800,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -537,7 +537,7 @@ Status guidelines:
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
       });
       console.log("[analyzeLabResultsTool] OpenAI API call completed", {
         hasResponse: !!response,
@@ -697,7 +697,7 @@ Check for interactions with the user's supplements. Flag any allergens.`;
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -793,7 +793,7 @@ Provide a JSON response with:
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
 
       const responseContent = response.choices[0]?.message?.content;

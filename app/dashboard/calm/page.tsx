@@ -11,6 +11,7 @@ import { springs, staggerContainer, fadeInUp } from "@/lib/motion-system"
 import { logger } from "@/lib/logger"
 import { useCalmAudio } from "@/hooks/queries"
 import { shuffleWithoutAdjacentDuplicates } from "@/lib/array-utils"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 /**
  * Calm Zone Tab Page - Light/Dark Mode Support
@@ -219,15 +220,18 @@ export default function CalmPage() {
         {/* Header */}
         <motion.div 
           variants={fadeInUp}
-          className="flex items-center gap-3"
+          className="flex items-center justify-between gap-3"
         >
-          <div className="p-2 rounded-xl bg-indigo-500/20 dark:bg-indigo-500/20">
-            <Moon size={22} className="text-indigo-600 dark:text-indigo-400" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-500/20 dark:bg-indigo-500/20">
+              <Moon size={22} className="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <h1 className="saydo-headline text-2xl font-semibold text-foreground">Calm Zone</h1>
+              <p className="text-sm text-muted-foreground">Breathe. Relax. Be.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="saydo-headline text-2xl font-semibold text-foreground">Calm Zone</h1>
-            <p className="text-sm text-muted-foreground">Breathe. Relax. Be.</p>
-          </div>
+          <ThemeToggle />
         </motion.div>
 
         {/* Search */}

@@ -19,7 +19,7 @@ interface NotificationItemProps {
   notification: {
     id: string
     title: string
-    body: string
+    message: string
     type: string
     priority: string
     is_read: boolean
@@ -90,7 +90,7 @@ export function NotificationItem({
                 {notification.title}
               </p>
               <p className="text-xs text-muted-foreground">
-                {notification.body}
+                {notification.message}
               </p>
             </div>
 

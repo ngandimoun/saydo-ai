@@ -261,6 +261,80 @@ export const CORRELATION_PATTERNS: CorrelationPattern[] = [
     priority: "medium",
     iconName: "sparkles",
   },
+  // General Patterns - These don't require specific finding keys
+  // Multi-System Activity
+  {
+    id: "multi_system_activity",
+    name: "Comprehensive Health Tracking",
+    description: "Multiple body systems being monitored",
+    systems: ["general"],
+    triggerConditions: [], // Special handling - requires 2+ systems with findings
+    explanation: "You're tracking multiple aspects of your health across different body systems. This comprehensive approach helps identify connections and patterns.",
+    actionTip: "Continue monitoring all systems. Look for trends and patterns across your health data to get a complete picture.",
+    confidence: 0.7,
+    priority: "low",
+    iconName: "activity",
+  },
+  // Attention Across Systems
+  {
+    id: "attention_across_systems",
+    name: "Multiple Systems Need Attention",
+    description: "Several body systems showing attention or concern",
+    systems: ["general"],
+    triggerConditions: [], // Special handling - requires 2+ systems with attention/concern
+    explanation: "Multiple body systems are showing findings that need attention. This suggests there may be underlying connections or systemic factors at play.",
+    actionTip: "Consider how these systems might be connected. Lifestyle factors like stress, nutrition, and sleep often affect multiple systems simultaneously.",
+    confidence: 0.75,
+    priority: "medium",
+    iconName: "alert-triangle",
+  },
+  // Nutrition and Energy Connection
+  {
+    id: "nutrition_energy_general",
+    name: "Nutrition & Energy Link",
+    description: "Nutrition findings connected to energy-related systems",
+    systems: ["nutrition", "metabolic", "blood"],
+    triggerConditions: [
+      { system: "nutrition", status: ["attention", "concern", "good"] },
+      { system: "metabolic", status: ["attention", "concern", "good"] },
+    ],
+    explanation: "Your nutrition and metabolism are closely linked. What you eat directly affects your energy levels, blood sugar, and metabolic function.",
+    actionTip: "Focus on balanced meals with protein, healthy fats, and complex carbs. Eating regularly helps maintain steady energy throughout the day.",
+    confidence: 0.7,
+    priority: "medium",
+    iconName: "flame",
+  },
+  // Cardiovascular and Metabolic Connection
+  {
+    id: "cardio_metabolic_general",
+    name: "Heart & Metabolism Connection",
+    description: "Cardiovascular and metabolic systems both showing activity",
+    systems: ["cardiovascular", "metabolic"],
+    triggerConditions: [
+      { system: "cardiovascular", status: ["attention", "concern", "good"] },
+      { system: "metabolic", status: ["attention", "concern", "good"] },
+    ],
+    explanation: "Your heart health and metabolism work together. Blood sugar, cholesterol, and metabolic function all impact cardiovascular health.",
+    actionTip: "Maintain a heart-healthy diet and regular exercise. Both support metabolic function and cardiovascular health simultaneously.",
+    confidence: 0.75,
+    priority: "medium",
+    iconName: "heart",
+  },
+  // Immune and General Health
+  {
+    id: "immune_system_activity",
+    name: "Immune System Activity",
+    description: "Immune system findings with other health indicators",
+    systems: ["immune", "general"],
+    triggerConditions: [
+      { system: "immune", status: ["attention", "concern", "good"] },
+    ],
+    explanation: "Your immune system is being monitored along with other health metrics. Immune function affects and is affected by many other body systems.",
+    actionTip: "Support your immune system with adequate sleep, stress management, and a diet rich in vitamins C, D, and zinc.",
+    confidence: 0.7,
+    priority: "medium",
+    iconName: "shield",
+  },
 ];
 
 /**
@@ -307,73 +381,141 @@ export async function detectCorrelations(userId: string): Promise<DetectedCorrel
   }
 
   const detectedCorrelations: DetectedCorrelation[] = [];
+  const systemsWithFindings = Object.keys(findingsBySystem);
+  const systemsWithAttention = systemsWithFindings.filter(system => 
+    findingsBySystem[system].some(f => f.status === "attention" || f.status === "concern")
+  );
 
   // Check each pattern
   for (const pattern of CORRELATION_PATTERNS) {
     const matchedFindings: DetectedCorrelation["matchedFindings"] = [];
     let conditionsMet = 0;
 
-    // Check each trigger condition
-    for (const condition of pattern.triggerConditions) {
-      const systemFindings = findingsBySystem[condition.system];
-      if (!systemFindings) continue;
+    // Special handling for general patterns with empty triggerConditions
+    if (pattern.triggerConditions.length === 0) {
+      if (pattern.id === "multi_system_activity") {
+        // Requires 2+ systems with any findings
+        if (systemsWithFindings.length >= 2) {
+          // Add findings from at least 2 different systems
+          for (const system of systemsWithFindings.slice(0, Math.min(3, systemsWithFindings.length))) {
+            const systemFinding = findingsBySystem[system][0];
+            if (systemFinding) {
+              matchedFindings.push({
+                findingId: systemFinding.id,
+                system: systemFinding.body_system,
+                title: systemFinding.title,
+                status: systemFinding.status,
+              });
+            }
+          }
+          conditionsMet = 1;
+        }
+      } else if (pattern.id === "attention_across_systems") {
+        // Requires 2+ systems with attention/concern status
+        if (systemsWithAttention.length >= 2) {
+          for (const system of systemsWithAttention.slice(0, Math.min(3, systemsWithAttention.length))) {
+            const attentionFinding = findingsBySystem[system].find(f => 
+              f.status === "attention" || f.status === "concern"
+            );
+            if (attentionFinding) {
+              matchedFindings.push({
+                findingId: attentionFinding.id,
+                system: attentionFinding.body_system,
+                title: attentionFinding.title,
+                status: attentionFinding.status,
+              });
+            }
+          }
+          conditionsMet = 1;
+        }
+      }
+    } else {
+      // Standard pattern matching with trigger conditions
+      // Check each trigger condition
+      for (const condition of pattern.triggerConditions) {
+        const systemFindings = findingsBySystem[condition.system];
+        if (!systemFindings) continue;
 
-      for (const finding of systemFindings) {
-        let matches = false;
+        for (const finding of systemFindings) {
+          let matches = false;
 
-        // Check finding key pattern
-        if (condition.findingKeyPattern) {
-          const regex = new RegExp(condition.findingKeyPattern, "i");
-          if (regex.test(finding.finding_key)) {
+          // Check finding key pattern with improved flexibility
+          if (condition.findingKeyPattern) {
+            const regex = new RegExp(condition.findingKeyPattern, "i");
+            // Try exact match first
+            if (regex.test(finding.finding_key)) {
+              matches = true;
+            } else {
+              // Try partial match on finding key
+              const keyLower = finding.finding_key.toLowerCase();
+              const patternLower = condition.findingKeyPattern.toLowerCase();
+              const patternParts = patternLower.split("|");
+              if (patternParts.some(part => keyLower.includes(part.trim()))) {
+                matches = true;
+              }
+            }
+          } else if (condition.findingKey) {
+            if (finding.finding_key === condition.findingKey) {
+              matches = true;
+            } else {
+              // Try case-insensitive partial match
+              const keyLower = finding.finding_key.toLowerCase();
+              const conditionLower = condition.findingKey.toLowerCase();
+              if (keyLower.includes(conditionLower) || conditionLower.includes(keyLower)) {
+                matches = true;
+              }
+            }
+          } else {
+            // No specific key required, just check status
             matches = true;
           }
-        } else if (condition.findingKey) {
-          if (finding.finding_key === condition.findingKey) {
-            matches = true;
-          }
-        } else {
-          // No specific key required, just check status
-          matches = true;
-        }
 
-        // Check status
-        if (matches && condition.status) {
-          if (!condition.status.includes(finding.status)) {
-            matches = false;
+          // Check status
+          if (matches && condition.status) {
+            if (!condition.status.includes(finding.status)) {
+              matches = false;
+            }
           }
-        }
 
-        // Check value comparison
-        if (matches && condition.valueComparison && finding.value_numeric !== null) {
-          const value = Number(finding.value_numeric);
-          const { operator, value: compareValue, value2 } = condition.valueComparison;
-          
-          switch (operator) {
-            case "lt": matches = value < compareValue; break;
-            case "gt": matches = value > compareValue; break;
-            case "eq": matches = value === compareValue; break;
-            case "between": matches = value >= compareValue && value <= (value2 || compareValue); break;
+          // Check value comparison
+          if (matches && condition.valueComparison && finding.value_numeric !== null) {
+            const value = Number(finding.value_numeric);
+            const { operator, value: compareValue, value2 } = condition.valueComparison;
+            
+            switch (operator) {
+              case "lt": matches = value < compareValue; break;
+              case "gt": matches = value > compareValue; break;
+              case "eq": matches = value === compareValue; break;
+              case "between": matches = value >= compareValue && value <= (value2 || compareValue); break;
+            }
           }
-        }
 
-        if (matches) {
-          matchedFindings.push({
-            findingId: finding.id,
-            system: finding.body_system,
-            title: finding.title,
-            status: finding.status,
-          });
-          conditionsMet++;
-          break; // One match per condition is enough
+          if (matches) {
+            matchedFindings.push({
+              findingId: finding.id,
+              system: finding.body_system,
+              title: finding.title,
+              status: finding.status,
+            });
+            conditionsMet++;
+            break; // One match per condition is enough
+          }
         }
       }
     }
 
-    // Require at least 1 condition met, or multiple for multi-system patterns
-    const minConditions = pattern.systems.length > 2 ? 1 : 1;
+    // Require at least 1 condition met for most patterns
+    // For patterns with multiple trigger conditions, require at least 1 match
+    // For patterns with empty triggerConditions, special handling already done above
+    const minConditions = pattern.triggerConditions.length === 0 
+      ? 1 
+      : 1; // Always require at least 1 condition match
+    
     if (conditionsMet >= minConditions && matchedFindings.length > 0) {
       // Calculate confidence based on matches
-      const matchRatio = conditionsMet / pattern.triggerConditions.length;
+      const matchRatio = pattern.triggerConditions.length === 0
+        ? 1.0
+        : conditionsMet / pattern.triggerConditions.length;
       const adjustedConfidence = pattern.confidence * (0.7 + 0.3 * matchRatio);
 
       detectedCorrelations.push({

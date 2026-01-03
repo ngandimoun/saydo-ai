@@ -163,3 +163,173 @@ self.addEventListener("notificationclose", (event: NotificationEvent) => {
   console.log("[Service Worker] Notification closed:", event);
   // Could track analytics here if needed
 });
+
+// ============================================
+// Background Sync Handlers for Voice Processing
+// ============================================
+
+// Handle background sync events for voice processing
+self.addEventListener("sync", (event: SyncEvent) => {
+  console.log("[Service Worker] Background sync event:", event.tag);
+
+  // Check if this is a voice processing sync event
+  if (event.tag.startsWith("voice-processing-")) {
+    event.waitUntil(handleVoiceProcessingSync(event.tag));
+  }
+});
+
+/**
+ * Handle voice processing background sync
+ * The job ID is embedded in the sync tag: "voice-processing-{jobId}"
+ * 
+ * Note: Since service workers can't directly access IndexedDB, we'll use
+ * a cache API approach or request job data from clients via postMessage.
+ * For now, we'll use a simpler approach: store job data in Cache API
+ * when registering sync, and retrieve it here.
+ */
+async function handleVoiceProcessingSync(syncTag: string): Promise<void> {
+  try {
+    // Extract job ID from sync tag
+    const jobId = syncTag.replace("voice-processing-", "");
+    console.log("[Service Worker] Processing voice job:", jobId);
+
+    // Try to get job data from cache (stored when sync was registered)
+    const cache = await caches.open("voice-jobs");
+    const cachedResponse = await cache.match(`job-${jobId}`);
+
+    let jobData: any = null;
+
+    if (cachedResponse) {
+      jobData = await cachedResponse.json();
+      // Delete from cache after retrieving
+      await cache.delete(`job-${jobId}`);
+    } else {
+      // Fallback: request from clients
+      const clients = await self.clients.matchAll({
+        includeUncontrolled: true,
+        type: "window",
+      });
+
+      if (clients.length > 0) {
+        // Send message to get job data
+        const messageChannel = new MessageChannel();
+        const jobDataPromise = new Promise<any>((resolve, reject) => {
+          messageChannel.port1.onmessage = (event) => {
+            if (event.data.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve(event.data.job);
+            }
+          };
+
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            reject(new Error("Timeout waiting for job data"));
+          }, 5000);
+        });
+
+        clients[0].postMessage(
+          {
+            type: "GET_VOICE_JOB",
+            jobId,
+          },
+          [messageChannel.port2]
+        );
+
+        try {
+          jobData = await jobDataPromise;
+        } catch (error) {
+          console.error("[Service Worker] Failed to get job data from client:", error);
+        }
+      }
+    }
+
+    if (!jobData) {
+      console.warn("[Service Worker] No job data available, skipping");
+      return;
+    }
+
+    // Process the job by calling the API
+    const response = await fetch("/api/voice/process", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        sourceRecordingId: jobData.recordingId,
+        transcription: jobData.transcription,
+        aiSummary: jobData.aiSummary,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(errorData.error || `Processing failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("[Service Worker] Voice processing completed:", result);
+
+    // Notify clients of completion
+    const allClients = await self.clients.matchAll({
+      includeUncontrolled: true,
+      type: "window",
+    });
+
+    allClients.forEach((client) => {
+      client.postMessage({
+        type: "VOICE_JOB_COMPLETE",
+        jobId,
+        result: {
+          tasksCount: result.saved?.tasks || 0,
+          remindersCount: result.saved?.reminders || 0,
+        },
+      });
+    });
+
+    // Show notification
+    const tasksCount = result.saved?.tasks || 0;
+    const remindersCount = result.saved?.reminders || 0;
+    const totalItems = tasksCount + remindersCount;
+
+    let body = "Voice processing completed";
+    if (totalItems > 0) {
+      const items = [];
+      if (tasksCount > 0) items.push(`${tasksCount} task${tasksCount > 1 ? "s" : ""}`);
+      if (remindersCount > 0)
+        items.push(`${remindersCount} reminder${remindersCount > 1 ? "s" : ""}`);
+      body = `Created ${items.join(" and ")}`;
+    }
+
+    await self.registration.showNotification("Voice Processing Complete", {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: `voice-job-${jobId}`,
+      data: {
+        jobId,
+        actionUrl: "/dashboard/tasks",
+        tasksCount,
+        remindersCount,
+      },
+      requireInteraction: false,
+    });
+  } catch (error) {
+    console.error("[Service Worker] Voice processing sync failed:", error);
+
+    // Notify clients of failure
+    const clients = await self.clients.matchAll({
+      includeUncontrolled: true,
+      type: "window",
+    });
+
+    clients.forEach((client) => {
+      client.postMessage({
+        type: "VOICE_JOB_FAILED",
+        jobId: syncTag.replace("voice-processing-", ""),
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    });
+  }
+}

@@ -556,20 +556,49 @@ const extractItemsStep = createStep({
 - Always use ISO format (YYYY-MM-DD) for dates and ISO datetime for reminder times
 - NEVER use dates from the past (like 2023-10-06) - always calculate from ${currentDate}
 
-## TIME EXTRACTION - CRITICAL
-**YOU MUST extract specific times mentioned in the transcription:**
-- If user says "match at 3pm": Extract dueDate as the current date (${currentDate}) and dueTime as "15:00" (24-hour format)
-- If user says "appointment tomorrow at 2:30": Extract dueDate as tomorrow's date (${tomorrowDate}) and dueTime as "14:30"
-- If user says "meeting in 2 hours": Calculate exact time and set dueTime in HH:MM format
-- If user says "match at 15:00": Extract dueTime as "15:00" directly
-- If user says "at 2:30 PM": Convert to 24-hour format: dueTime as "14:30"
-- **ALWAYS populate dueTime field when a specific time is mentioned** - this is critical for task scheduling
-- **dueTime must be in 24-hour format (HH:MM)** - e.g., "15:00" not "3pm"
-- Examples:
-  - "match at 3pm": dueTime should be "15:00"
-  - "appointment at 9:30 AM": dueTime should be "09:30"
-  - "meeting at 14:00": dueTime should be "14:00"
-  - "football match tomorrow at 2pm": dueDate should be tomorrow's date (${tomorrowDate}), dueTime should be "14:00"
+## TASK DETECTION - CRITICAL
+
+**YOU MUST extract ALL actionable items as tasks, including work tasks, grocery lists, shopping lists, personal todos, and any other actionable items.**
+
+**Multi-Language Task Examples:**
+
+**Work Tasks:**
+- "Ce soir, j'ai un travail important à faire avec des collègues" → Task: title="Travail important avec des collègues", dueDate=${currentDate}, dueTime="19:00", category="work", tags=["travail", "collègues", "important", "soir"]
+- "Demain, j'ai une réunion à 14h" → Task: title="Réunion", dueDate=${tomorrowDate}, dueTime="14:00", category="work", tags=["réunion", "travail"]
+- "I have work to do tomorrow" → Task: title="Work to do", dueDate=${tomorrowDate}, dueTime="09:00", category="work", tags=["work"]
+- "Tengo que terminar el proyecto mañana" → Task: title="Terminar el proyecto", dueDate=${tomorrowDate}, dueTime="09:00", category="work", tags=["proyecto", "trabajo"]
+
+**Grocery/Shopping Tasks:**
+- "Demain, je dois faire les courses et acheter du lait" → Task: title="Faire les courses et acheter du lait", dueDate=${tomorrowDate}, dueTime="10:00", category="grocery" or "shopping", tags=["courses", "achats", "lait", "supermarché"]
+- "I need to buy groceries tomorrow morning" → Task: title="Buy groceries", dueDate=${tomorrowDate}, dueTime="09:00", category="grocery", tags=["grocery", "shopping"]
+- "Tengo que comprar comida mañana" → Task: title="Comprar comida", dueDate=${tomorrowDate}, dueTime="10:00", category="grocery", tags=["compras", "comida"]
+
+**Personal/Todo Tasks:**
+- "Tengo que llamar a mi mamá mañana por la tarde" → Task: title="Llamar a mi mamá", dueDate=${tomorrowDate}, dueTime="15:00", category="personal" or "family", tags=["llamada", "familia", "mamá"]
+- "Je dois appeler mon médecin demain" → Task: title="Appeler mon médecin", dueDate=${tomorrowDate}, dueTime="09:00", category="health", tags=["appel", "médecin", "santé"]
+- "I need to call my mom tomorrow afternoon" → Task: title="Call my mom", dueDate=${tomorrowDate}, dueTime="15:00", category="personal" or "family", tags=["call", "family", "mom"]
+
+**AI-Based Smart Time Parsing (No Regex):**
+Use your natural language understanding to parse times intelligently. Understand context and meaning, don't rely on pattern matching.
+
+**Time Parsing Examples:**
+- "ce soir" (tonight) → dueDate: ${currentDate}, dueTime: "19:00" (evening inferred)
+- "demain matin" (tomorrow morning) → dueDate: ${tomorrowDate}, dueTime: "09:00" (morning inferred)
+- "demain après-midi" (tomorrow afternoon) → dueDate: ${tomorrowDate}, dueTime: "15:00" (afternoon inferred)
+- "mañana por la tarde" (tomorrow afternoon) → dueDate: ${tomorrowDate}, dueTime: "15:00" (afternoon inferred)
+- "tomorrow morning" → dueDate: ${tomorrowDate}, dueTime: "09:00" (morning inferred)
+- "tomorrow afternoon" → dueDate: ${tomorrowDate}, dueTime: "15:00" (afternoon inferred)
+- "at 3pm" or "à 15h" → Extract time as "15:00" (24-hour format)
+- "at 2:30 PM" or "à 14h30" → Extract time as "14:30" (24-hour format)
+
+**Time Extraction Rules:**
+- **ALWAYS populate dueTime field when a specific time is mentioned OR can be inferred from context**
+- **dueTime must be in 24-hour format (HH:MM)** - e.g., "15:00" not "3pm", "09:00" not "9am"
+- **When time is ambiguous, infer reasonable time based on context:**
+  - Evening tasks → 19:00 (default evening time)
+  - Morning tasks → 09:00 (default morning time)
+  - Afternoon tasks → 15:00 (default afternoon time)
+  - Shopping/grocery → 10:00 (typical shopping time)
 
 ## CLASSIFICATION PRIORITY HIERARCHY - CRITICAL
 
@@ -613,6 +642,12 @@ When the user says ANY of these generation verbs followed by a content type, you
 1. FIRST check if it's a content generation request (generation verb + content type) → contentPrediction
 2. THEN check if it's a reminder (time-sensitive, remind me in X) → reminder
 3. LAST check if it's a task (actionable item) → task
+
+**CRITICAL: When in doubt, classify as a task rather than ignoring. Extract ALL actionable items including:**
+- Work tasks (meetings, projects, work with colleagues)
+- Grocery/shopping tasks (buying items, shopping lists)
+- Personal todos (calls, errands, household tasks)
+- Any other actionable items the user mentions
 
 ${fileContentContext}
 ## FILE-BASED CONTENT GENERATION - CRITICAL
@@ -1599,10 +1634,22 @@ const notifyContentStep = createStep({
 
         for (const content of generatedContent) {
           if (content.documentId && content.status === "ready") {
+            // Format content type to Title Case (e.g., "email_draft" -> "Email Draft")
+            const typeLabel = content.contentType
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+            
+            // Generate dynamic title: "TypeLabel: DocumentTitle"
+            // Truncate if too long (max ~60 chars for readability)
+            const dynamicTitle = `${typeLabel}: ${content.title}`;
+            const title = dynamicTitle.length > 60 
+              ? `${dynamicTitle.substring(0, 57)}...` 
+              : dynamicTitle;
+
             await supabase.from("notifications").insert({
               user_id: userId,
-              title: "New Content Ready",
-              message: `I drafted a ${content.contentType}: "${content.title}"`,
+              title,
+              message: `I drafted a ${typeLabel}: "${content.title}"`,
               type: "ai_generated",
               related_document_id: content.documentId,
               deep_link: `/dashboard/pro?doc=${content.documentId}`,

@@ -217,6 +217,28 @@ As content for a ${profession}, ensure:
 4. **Include appropriate tags** extracted from content
 5. **All content must be in ${languageName}**
 
+## CRITICAL GENERATION RULES - MANDATORY
+
+**NEVER ask follow-up questions or offer customization. Generate complete, ready-to-use content directly.**
+
+1. **Direct Generation Only**: Generate the complete content immediately. Do NOT ask questions, offer to customize, or request clarification.
+
+2. **No Follow-up Phrases**: NEVER include phrases like:
+   - French: "Si vous voulez", "Que préférez-vous", "je peux adapter", "Si vous souhaitez"
+   - English: "I can", "Would you like", "If you want", "Let me know if"
+   - Spanish: "Si quieres", "¿Prefieres", "Puedo adaptar"
+   - Any language equivalent asking what the user prefers
+
+3. **Make Reasonable Assumptions**: If specific details are missing (times, names, exact dates, etc.):
+   - Infer from context when possible
+   - Use reasonable defaults or placeholders
+   - Generate complete content with best-guess values
+   - Do NOT ask the user to provide missing information
+
+4. **Complete Content**: The generated content must be final and ready to use. It should be a complete, polished piece that the user can immediately use without further modification.
+
+5. **No Conversational Elements**: The content itself should be the final output. Do NOT add meta-commentary, suggestions for changes, or offers to help.
+
 ## ALTERNATIVE VERSIONS (Context-Aware)
 
 **IMPORTANT**: Alternative versions should only be generated when they add value based on the document style and context.
@@ -330,6 +352,13 @@ ${contentRequest.additionalInstructions ? `- Additional Instructions: ${contentR
 3. Generate professional, well-formatted content
 4. Consider whether alternative versions would add value based on document style and context (see alternative versions guidelines in instructions)
 5. Extract appropriate tags
+
+## CRITICAL: DIRECT GENERATION REQUIRED
+- **DO NOT ask follow-up questions** - Generate complete content immediately
+- **DO NOT offer customization** - The content should be final and ready to use
+- **DO NOT include phrases** asking what the user prefers (e.g., "Si vous voulez", "I can", "Would you like")
+- **Make reasonable assumptions** if details are missing - infer from context or use appropriate placeholders
+- **Generate complete, polished content** that can be used immediately without modification
 
 Use the output-generated-content tool to return the content.
 ALL content must be in ${languageName}.`;

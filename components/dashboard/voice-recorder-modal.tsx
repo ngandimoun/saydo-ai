@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion-system"
 import { useVoiceRecorder, type VoiceProcessingResult } from "@/hooks/use-voice-recorder"
 import { logger } from "@/lib/logger"
+import { processVoiceJob } from "@/lib/voice-processing-service"
+import { setupBeforeUnloadHandler } from "@/lib/audio-player-persistence"
+import { toast } from "sonner"
+import { createClient } from "@/lib/supabase"
 
 /**
  * Voice Recorder Modal - Airbnb-Inspired
@@ -56,6 +60,8 @@ export function VoiceRecorderModal({
     error: recorderError,
     startRecording,
     stopRecording,
+    cancelRecording: cancelRecordingHook,
+    getRecordingId,
   } = useVoiceRecorder({
     maxDuration,
     autoProcess: true, // Enable AI processing
@@ -151,15 +157,86 @@ export function VoiceRecorderModal({
     }
   }, [stopRecording])
 
-  // Cancel recording
-  const cancelRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecording().catch((error) => {
-        logger.error('Failed to cancel recording', { error })
-      })
+  // Delete recording from database and storage
+  const deleteRecording = useCallback(async (recordingIdToDelete: string) => {
+    try {
+      const supabase = createClient()
+      
+      // Get recording to find storage path
+      const { data: recording, error: fetchError } = await supabase
+        .from('voice_recordings')
+        .select('audio_url')
+        .eq('id', recordingIdToDelete)
+        .single()
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        // PGRST116 is "not found" - that's okay, recording might not exist yet
+        logger.error('Failed to fetch recording for deletion', { error: fetchError })
+      }
+
+      // Delete from storage if audio_url exists
+      if (recording?.audio_url) {
+        try {
+          // Extract storage path from URL
+          // Format: https://[project].supabase.co/storage/v1/object/sign/voice-recordings/[path]?token=...
+          // Or: https://[project].supabase.co/storage/v1/object/public/voice-recordings/[path]
+          const url = new URL(recording.audio_url)
+          const pathMatch = url.pathname.match(/\/voice-recordings\/(.+)$/)
+          if (pathMatch && pathMatch[1]) {
+            const storagePath = decodeURIComponent(pathMatch[1])
+            const { error: storageError } = await supabase.storage
+              .from('voice-recordings')
+              .remove([storagePath])
+
+            if (storageError) {
+              logger.error('Failed to delete recording from storage', { error: storageError })
+              // Continue with database deletion anyway
+            }
+          }
+        } catch (urlError) {
+          logger.error('Failed to parse audio URL for deletion', { error: urlError })
+          // Continue with database deletion anyway
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('voice_recordings')
+        .delete()
+        .eq('id', recordingIdToDelete)
+
+      if (dbError) {
+        logger.error('Failed to delete recording from database', { error: dbError })
+      } else {
+        logger.info('Recording deleted successfully', { recordingId: recordingIdToDelete })
+      }
+    } catch (error) {
+      logger.error('Error deleting recording', { error, recordingId: recordingIdToDelete })
     }
+  }, [])
+
+  // Cancel recording
+  const cancelRecording = useCallback(async () => {
+    // Get recording ID before cancelling
+    const currentRecordingId = getRecordingId() || recordingId
+
+    // Cancel the recording/processing
+    cancelRecordingHook()
+
+    // Delete recording from database and storage if it exists
+    if (currentRecordingId) {
+      await deleteRecording(currentRecordingId)
+    }
+
+    // Reset local state
+    setRecordingId(null)
+    setShowResults(false)
+    setEditedTranscription('')
+    setEditedAiSummary('')
+
+    // Close modal
     onClose()
-  }, [isRecording, stopRecording, onClose])
+  }, [cancelRecordingHook, getRecordingId, recordingId, deleteRecording, onClose])
 
   // Process edited transcription and save items
   const handleDone = useCallback(async () => {
@@ -172,56 +249,87 @@ export function VoiceRecorderModal({
     setSaveError(null)
 
     try {
-      // Call process endpoint with edited transcription
-      // This extracts items and saves them immediately
-      const response = await fetch('/api/voice/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          sourceRecordingId: recordingId,
-          transcription: editedTranscription.trim(),
-          aiSummary: editedAiSummary.trim() || undefined,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to process and save items')
-      }
-
-      const result = await response.json()
-      logger.info('Items processed and saved successfully', { 
+      // Create job for background processing
+      const jobId = crypto.randomUUID()
+      const job = {
+        id: jobId,
         recordingId,
-        tasksSaved: result.saved?.tasks || 0,
-        remindersSaved: result.saved?.reminders || 0,
-      })
-
-      // Dispatch events to trigger UI refresh
-      if (typeof window !== 'undefined') {
-        if (result.saved?.tasks > 0 || result.saved?.reminders > 0) {
-          window.dispatchEvent(new CustomEvent('voice-processing-complete', {
-            detail: {
-              tasksCount: result.saved?.tasks || 0,
-              remindersCount: result.saved?.reminders || 0,
-            }
-          }))
-          window.dispatchEvent(new CustomEvent('tasks-updated'))
-          localStorage.setItem('voice-processing-complete', Date.now().toString())
-          localStorage.setItem('tasks-updated', Date.now().toString())
-        }
+        transcription: editedTranscription.trim(),
+        aiSummary: editedAiSummary.trim() || undefined,
+        status: 'pending' as const,
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: Date.now(),
       }
 
+      // Log to console for debugging
+      console.log('[Voice Recorder] Starting voice processing job', {
+        jobId,
+        recordingId,
+        transcriptionLength: editedTranscription.trim().length,
+        hasAiSummary: !!editedAiSummary.trim(),
+      })
+
+      // Show toast notification
+      toast.loading('Processing your voice note...', {
+        id: `voice-job-${jobId}`,
+        description: 'This will continue in the background',
+      })
+
+      // Start processing in background (don't await - let it run async)
+      // This will either register background sync or process immediately
+      processVoiceJob(job)
+        .then(() => {
+          console.log('[Voice Recorder] Voice processing job started successfully', { jobId })
+          // Toast will be updated by the processing service when complete
+        })
+        .catch((error) => {
+          console.error('[Voice Recorder] Voice processing job failed to start', { error, jobId, recordingId })
+          logger.error('Voice processing job failed to start', { error, jobId, recordingId })
+          // Job is saved in IndexedDB, so it can be retried later
+          toast.error('Failed to start processing', {
+            id: `voice-job-${jobId}`,
+            description: 'The job has been saved and will be retried automatically',
+          })
+        })
+
+      logger.info('Voice processing job started', { 
+        jobId,
+        recordingId,
+      })
+
+      // Reset saving state and close modal immediately
+      // Processing will continue in background
+      // User will get notification when complete
+      setIsSaving(false)
       onClose()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process and save items'
-      logger.error('Failed to process and save items', { error, recordingId })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start processing'
+      logger.error('Failed to create voice processing job', { error, recordingId })
       setSaveError(errorMessage)
       setIsSaving(false)
     }
   }, [recordingId, editedTranscription, editedAiSummary, onClose])
+
+  // Setup beforeunload handler to ensure job is saved
+  useEffect(() => {
+    if (!isSaving || !recordingId) return
+
+    const cleanup = setupBeforeUnloadHandler(() => ({
+      // Job is already saved in IndexedDB by processVoiceJob
+      // This handler ensures state is persisted
+      currentTrackId: null,
+      playlist: [],
+      currentTime: 0,
+      isPlaying: false,
+      volume: 1,
+      isMuted: false,
+      isShuffled: false,
+      repeatMode: 'off' as const,
+    }))
+
+    return cleanup
+  }, [isSaving, recordingId])
 
   // Calculate progress percentage
   const progress = (duration / maxDuration) * 100
@@ -606,6 +714,17 @@ export function VoiceRecorderModal({
                   </div>
                   <p className="text-white/60 font-medium">Saydo is processing...</p>
                   <p className="text-white/40 text-sm">Extracting tasks and insights</p>
+                  
+                  {/* Cancel button during processing */}
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    transition={springs.snappy}
+                    onClick={cancelRecording}
+                    className="mt-4 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10 hover:bg-red-500/20 hover:border-red-500/50"
+                  >
+                    <Trash2 size={22} className="text-white/70" />
+                  </motion.button>
                 </motion.div>
               )}
             </div>

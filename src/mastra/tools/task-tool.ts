@@ -155,6 +155,31 @@ export const createTaskTool = createTool({
         });
       });
 
+      // Check if task is urgent and create notification (async, don't block)
+      const isUrgentPriority = priority === "urgent";
+      let isDueSoon = false;
+      
+      if (dueDate) {
+        const dueDateObj = new Date(dueDate);
+        const now = new Date();
+        const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+        
+        if (dueTime) {
+          const [hours, minutes] = dueTime.split(':').map(Number);
+          dueDateObj.setHours(hours, minutes, 0, 0);
+        }
+        
+        isDueSoon = dueDateObj.getTime() <= oneHourFromNow.getTime() && dueDateObj.getTime() >= now.getTime();
+      }
+
+      if (isUrgentPriority || isDueSoon) {
+        import("@/lib/mastra/notification-service").then(({ notifyUrgentTask }) => {
+          notifyUrgentTask(userId, data.id, title, dueDate || undefined, dueTime || undefined).catch(
+            (err) => console.error("[createTaskTool] Failed to create urgent task notification", err)
+          );
+        });
+      }
+
       return { success: true, taskId: data.id };
     } catch (err) {
       console.error('[createTaskTool] Exception', {

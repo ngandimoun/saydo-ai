@@ -224,7 +224,11 @@ export const classifyHealthDocumentTool = createTool({
 1. **food_photo** - A meal, plate of food, ingredients, recipe, or any food item
 2. **supplement** - Supplement bottle, pills, capsules, nutrition facts label, vitamin packaging
 3. **drink** - Beverage, bottle, can, juice, smoothie, energy drink, or any drinkable liquid
-4. **lab_pdf** - Lab results document (even if it's an image of a printed lab report)
+4. **lab_pdf** - Lab results document, printed lab report, OR screenshot of a health dashboard/app showing lab results, biomarkers, or body system analytics. This includes:
+   - Screenshots of health apps showing "Your Body Systems", "Blood & Hematology", "findings", "biomarkers"
+   - UI screenshots showing blood test parameters (cholesterol, platelets, hemoglobin, etc.)
+   - Health dashboard screenshots with lab values, evolution tracking, or body system data
+   - Any screenshot of a digital interface displaying medical test results or health metrics
 5. **lab_handwritten** - Handwritten lab results, notes from a doctor, or scanned medical notes
 6. **medication** - Prescription medication, pill bottle, drug packaging, pharmacy label
 7. **clinical_report** - Doctor's notes, clinical reports, medical imaging results
@@ -235,8 +239,8 @@ export const classifyHealthDocumentTool = createTool({
 - **eyes** - Vision tests, eye exams, ophthalmology reports
 - **digestive** - GI tests, stool analysis, endoscopy, stomach/intestine related
 - **skin** - Dermatology, skin conditions, skincare products
-- **blood** - Blood tests, CBC, hematology
-- **cardiovascular** - Heart, blood pressure, lipid panels, ECG
+- **blood** - Blood tests, CBC, hematology, platelets, white blood cells, red blood cells, hemoglobin, hematocrit. Use this for screenshots showing blood test parameters or "Blood & Hematology" sections.
+- **cardiovascular** - Heart, blood pressure, lipid panels (cholesterol, HDL, LDL, triglycerides), ECG
 - **hormones** - Thyroid, testosterone, estrogen, cortisol tests
 - **nutrition** - Vitamin levels, mineral tests, nutritional assessments, food, supplements
 - **respiratory** - Lung function, breathing tests
@@ -247,6 +251,12 @@ export const classifyHealthDocumentTool = createTool({
 - **immune** - Allergy tests, immune markers
 - **metabolic** - Glucose, diabetes, HbA1c tests
 - **general** - Multi-system or unclear which body system
+
+**IMPORTANT FOR SCREENSHOTS:**
+- If you see a screenshot of a health dashboard, mobile app, or web interface showing lab results, biomarkers, or body system analytics, classify as **lab_pdf**
+- Look for UI elements like "Your Body Systems", "Blood & Hematology", "findings", "biomarkers", "evolution", "stable", "mg/dL", "g/L", etc.
+- For screenshots showing blood test parameters (cholesterol, platelets, hemoglobin, hematocrit, white blood cells, etc.), use **bodySystem: "blood"** or **"cardiovascular"** depending on the specific parameters shown
+- If you see lipid panel values (Total Cholesterol, HDL, LDL, Triglycerides), use **bodySystem: "cardiovascular"**
 
 Respond with a JSON object containing:
 {
@@ -259,10 +269,20 @@ Respond with a JSON object containing:
   "bodySystemContext": "Brief context about why this body system was chosen"
 }
 
-Be specific about what you see in the image. For food, identify the dish. For supplements, identify the brand or type. For lab results, note the format and what body system they test. For skincare products, identify the product type and brand if visible.`;
+Be specific about what you see in the image. For food, identify the dish. For supplements, identify the brand or type. For lab results (including screenshots), note the format, what body system they test, and any visible biomarkers or UI elements. For skincare products, identify the product type and brand if visible.`;
+
+      // Use gpt-4o which was working reliably
+      const model = "gpt-4o-2024-08-06";
+
+      console.log(`[classifyHealthDocumentTool] Classifying with model: ${model}`, {
+        fileName,
+        mimeType,
+        hasImageDataUrl: !!imageDataUrl,
+        imageDataUrlLength: imageDataUrl?.length || 0,
+      });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5-mini-2025-08-07",
+        model,
         messages: [
           {
             role: "user",
@@ -273,15 +293,33 @@ Be specific about what you see in the image. For food, identify the dish. For su
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 500,
+        max_completion_tokens: 500,
       });
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new Error("No response from classification model");
+        console.error(`[classifyHealthDocumentTool] No content found in response from model ${model}:`, {
+          response: JSON.stringify(response, null, 2),
+          finishReason: response.choices?.[0]?.finish_reason,
+        });
+        throw new Error(`No response content from classification model ${model}. Finish reason: ${response.choices?.[0]?.finish_reason || 'unknown'}`);
       }
 
-      const parsed = JSON.parse(content) as ClassificationResult;
+      console.log(`[classifyHealthDocumentTool] Parsing JSON content from model ${model}`, {
+        contentLength: content.length,
+        contentPreview: content.substring(0, 100),
+      });
+
+      let parsed: ClassificationResult;
+      try {
+        parsed = JSON.parse(content) as ClassificationResult;
+      } catch (parseError) {
+        console.error(`[classifyHealthDocumentTool] JSON parse error:`, {
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          content: content.substring(0, 500), // First 500 chars for debugging
+        });
+        throw new Error(`Failed to parse JSON response from model ${modelUsed}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
 
       // Validate the document type
       const validDocTypes = [

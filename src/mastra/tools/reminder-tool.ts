@@ -233,6 +233,20 @@ export const createReminderTool = createTool({
         });
       });
 
+      // Check if reminder is due soon or urgent and create notification (async, don't block)
+      const isUrgentPriority = priority === "urgent";
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      const isDueSoon = parsedTime.getTime() <= oneHourFromNow.getTime() && parsedTime.getTime() >= now.getTime();
+
+      if (isUrgentPriority || isDueSoon) {
+        import("@/lib/mastra/notification-service").then(({ notifyReminder }) => {
+          notifyReminder(userId, data.id, title, parsedTime, priority || undefined).catch(
+            (err) => console.error("[createReminderTool] Failed to create reminder notification", err)
+          );
+        });
+      }
+
       return { success: true, reminderId: data.id };
     } catch (err) {
       console.error('[createReminderTool] Exception', {

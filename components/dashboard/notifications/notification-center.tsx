@@ -350,7 +350,7 @@ export function NotificationCenter({
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground line-clamp-2">
-                              {notification.body}
+                              {notification.message}
                             </p>
                             <p className="text-xs text-muted-foreground mt-2">
                               {new Date(notification.created_at).toLocaleString(undefined, {

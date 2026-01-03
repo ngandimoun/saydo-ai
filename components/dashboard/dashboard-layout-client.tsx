@@ -24,6 +24,15 @@ import {
   clearPlayerState,
   setupBeforeUnloadHandler,
 } from "@/lib/audio-player-persistence"
+import {
+  loadPendingJobs,
+} from "@/lib/voice-processing-persistence"
+import {
+  retryJob,
+  setupServiceWorkerMessageHandler,
+  getJobBroadcastChannel,
+  processVoiceJob,
+} from "@/lib/voice-processing-service"
 
 /**
  * Dashboard Layout - Airbnb-Inspired
@@ -161,6 +170,149 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
   useEffect(() => {
     isPlayingRef.current = isPlaying
   }, [isPlaying])
+
+  // Setup voice processing service worker message handler
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const cleanup = setupServiceWorkerMessageHandler()
+
+    // Listen for job status updates via BroadcastChannel
+    const broadcastChannel = getJobBroadcastChannel()
+    if (broadcastChannel) {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'job-status') {
+          const { jobId, status, result } = event.data
+          logger.info('Voice job status update', { jobId, status, result })
+
+          // Dispatch events to trigger UI refresh if completed
+          if (status === 'completed' && result) {
+            if (typeof window !== 'undefined') {
+              if (result.tasksCount > 0 || result.remindersCount > 0) {
+                window.dispatchEvent(
+                  new CustomEvent('voice-processing-complete', {
+                    detail: {
+                      tasksCount: result.tasksCount,
+                      remindersCount: result.remindersCount,
+                    },
+                  })
+                )
+                window.dispatchEvent(new CustomEvent('tasks-updated'))
+              }
+            }
+          }
+        }
+      }
+
+      broadcastChannel.addEventListener('message', handleMessage)
+
+      return () => {
+        broadcastChannel.removeEventListener('message', handleMessage)
+        cleanup()
+      }
+    }
+
+    return cleanup
+  }, [])
+
+  // Check for pending voice processing jobs on mount and periodically
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const checkPendingJobs = async () => {
+      try {
+        const pendingJobs = await loadPendingJobs()
+        
+        if (pendingJobs.length > 0) {
+          console.log('[Dashboard] Found pending voice processing jobs', { count: pendingJobs.length })
+          logger.info('Found pending voice processing jobs', { count: pendingJobs.length })
+
+          // Process all pending and failed jobs
+          for (const job of pendingJobs) {
+            if (job.status === 'failed' && job.attempts < job.maxAttempts) {
+              console.log('[Dashboard] Retrying failed voice job', { jobId: job.id })
+              logger.info('Retrying failed voice job', { jobId: job.id })
+              await retryJob(job.id)
+            } else if (job.status === 'pending') {
+              // Process pending jobs immediately
+              console.log('[Dashboard] Processing pending voice job', { jobId: job.id })
+              logger.info('Processing pending voice job', { jobId: job.id })
+              // Don't await - let them process in parallel
+              processVoiceJob(job).catch((error) => {
+                console.error('[Dashboard] Failed to process pending job', { jobId: job.id, error })
+                logger.error('Failed to process pending job', { jobId: job.id, error })
+              })
+            } else if (job.status === 'processing') {
+              // Check if job has been processing for too long (>5 minutes) and retry
+              const age = Date.now() - job.createdAt
+              if (age > 5 * 60 * 1000) {
+                console.log('[Dashboard] Job stuck in processing, retrying', { jobId: job.id, age })
+                const retryJobData: VoiceProcessingJob = {
+                  ...job,
+                  status: 'pending',
+                  attempts: 0,
+                  error: undefined,
+                }
+                processVoiceJob(retryJobData).catch((error) => {
+                  console.error('[Dashboard] Failed to retry stuck job', { jobId: job.id, error })
+                })
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to check pending jobs', { error })
+        logger.error('Failed to check pending jobs', { error })
+      }
+    }
+
+    // Check immediately and then periodically
+    checkPendingJobs()
+    const interval = setInterval(checkPendingJobs, 30000) // Check every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Check for urgent tasks and reminders periodically
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const checkUrgentItems = async () => {
+      try {
+        const response = await fetch('/api/notifications/check-urgent', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.notificationsCreated > 0) {
+            console.log('[Dashboard] Created notifications for urgent items', {
+              count: data.notificationsCreated,
+            })
+            logger.info('Created notifications for urgent items', {
+              count: data.notificationsCreated,
+            })
+          }
+        } else {
+          console.error('[Dashboard] Failed to check urgent items', {
+            status: response.status,
+          })
+        }
+      } catch (error) {
+        console.error('[Dashboard] Error checking urgent items', { error })
+        logger.error('Error checking urgent items', { error })
+      }
+    }
+
+    // Check immediately and then periodically (every 5 minutes)
+    checkUrgentItems()
+    const interval = setInterval(checkUrgentItems, 5 * 60 * 1000) // Check every 5 minutes
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Initialize audio player
   useEffect(() => {

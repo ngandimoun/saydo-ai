@@ -147,6 +147,7 @@ Given the following analysis data, extract individual findings and explain them 
 2. **BE SPECIFIC**: Never give vague advice. Always include specific examples, foods, vitamins, or actions.
 3. **NO "CONSULT PROFESSIONAL"**: Instead of saying "consult a doctor", give actionable dietary/lifestyle advice the user can do TODAY.
 4. **INCLUDE EXAMPLES**: Every tip must include 2-3 specific examples with names.
+5. **EXTRACT ALL BIOMARKERS**: For lab results, extract EVERY biomarker found in the analysis data. Don't skip any.
 
 **Analysis Data:**
 ${JSON.stringify(analysisData, null, 2)}
@@ -154,30 +155,41 @@ ${JSON.stringify(analysisData, null, 2)}
 **Document Type:** ${documentType}
 **Body System:** ${bodySystem}
 
+**IMPORTANT FOR LAB RESULTS:**
+- If the analysis data contains a "biomarkers" array, extract a finding for EACH biomarker
+- Use the biomarker's name, value, unit, status, and reference ranges directly
+- Map biomarker status to finding status: "normal" → "good", "high"/"low" → "attention", "critical_high"/"critical_low" → "concern"
+- Extract referenceMin and referenceMax from the biomarker data
+- For each biomarker, create a specific actionTip based on what it measures
+
 For each finding, provide:
-1. **findingKey**: A unique snake_case identifier (e.g., "vitamin_d_level", "cholesterol_total")
-2. **title**: User-friendly title (e.g., "Vitamin D Level", "Total Cholesterol")
-3. **value**: The actual value (e.g., "32", "2.15")
+1. **findingKey**: A unique snake_case identifier (e.g., "vitamin_d_level", "cholesterol_total", "ldl_cholesterol", "hdl_cholesterol", "triglycerides", "platelets", "hemoglobin", "hematocrit")
+2. **title**: User-friendly title (e.g., "Vitamin D Level", "Total Cholesterol", "LDL Cholesterol", "Platelet Count")
+3. **value**: The actual value (e.g., "32", "2.15", "185", "112")
 4. **valueNumeric**: Numeric value if applicable (for trend tracking)
-5. **unit**: Unit of measurement if applicable
+5. **unit**: Unit of measurement if applicable (e.g., "mg/dL", "g/L", "/mm³", "g/dL", "%")
 6. **status**: One of:
    - "good" - Value is healthy/normal
-   - "attention" - Slightly off, worth monitoring
-   - "concern" - Needs attention, consider action
+   - "attention" - Slightly off, worth monitoring (high/low but not critical)
+   - "concern" - Needs attention, consider action (critical_high/critical_low or significantly abnormal)
    - "info" - Neutral information
 7. **severity**: 1-5 scale (1=mild, 5=severe) - only for attention/concern status
-8. **referenceMin/referenceMax**: Reference ranges if known
-9. **explanation**: Clear, friendly explanation in 1-2 sentences. Avoid medical jargon.
-10. **actionTip**: SPECIFIC actionable advice with EXAMPLES. Follow these patterns:
+8. **referenceMin/referenceMax**: Reference ranges if known (from biomarker data)
+9. **referenceText**: Original reference text if available (e.g., "< 200 mg/dL", "> 40 mg/dL")
+10. **explanation**: Clear, friendly explanation in 1-2 sentences. Avoid medical jargon. Explain what the value means in context.
+11. **actionTip**: SPECIFIC actionable advice with EXAMPLES. Follow these patterns:
+    - For high LDL cholesterol: "Reduce saturated fats: replace butter with olive oil, choose salmon/mackerel over red meat, add oats and almonds daily."
+    - For low HDL cholesterol: "Increase healthy fats: eat fatty fish (salmon, mackerel) 2x/week, add avocado daily, use olive oil for cooking, include nuts (almonds, walnuts)."
+    - For high triglycerides: "Limit refined carbs and sugar. Swap white bread for whole grain, avoid sugary drinks, add omega-3 (fish oil, flax seeds), exercise regularly."
+    - For high total cholesterol: "Reduce saturated fats: replace butter with olive oil, choose salmon/mackerel over red meat, add oats and almonds daily."
     - For vitamins: "Increase [vitamin name] with [food1], [food2], or [food3]. Consider supplements like [brand example] if needed."
-    - For high cholesterol: "Reduce saturated fats: replace butter with olive oil, choose salmon/mackerel over red meat, add oats and almonds daily."
     - For blood sugar: "Limit refined carbs. Swap white bread for whole grain, choose brown rice, add cinnamon to meals (helps regulate glucose)."
     - For hydration: "Drink 8 glasses/day. Try: lemon water in morning, cucumber-mint infused water, herbal teas like chamomile or green tea."
     - For immunity: "Boost with Vitamin C (oranges, kiwi, bell peppers), Vitamin D (15 min sunlight, salmon), Zinc (pumpkin seeds, chickpeas)."
     - For fiber: "Add fiber: psyllium husk (1 tbsp in water), chia seeds in smoothies, oatmeal for breakfast, legumes (lentils, black beans)."
     - NEVER say just "eat healthy" or "exercise more" - always give specific foods/activities
-11. **iconName**: Lucide icon name (e.g., "heart", "droplet", "pill", "apple")
-12. **priority**: 1-100 (lower = more important, shows first)
+12. **iconName**: Lucide icon name (e.g., "heart", "droplet", "pill", "apple", "activity")
+13. **priority**: 1-100 (lower = more important, shows first). Use lower priority for "concern" status findings.
 
 ## EXAMPLE OF GOOD vs BAD actionTip:
 BAD: "Maintenez une alimentation riche en vitamines pour votre système immunitaire."
@@ -208,16 +220,17 @@ Respond with JSON array:
   ]
 }
 
-Extract ALL relevant findings. Be comprehensive and ALWAYS give specific, actionable advice with real examples.`;
+Extract ALL relevant findings. For lab results with biomarkers array, extract a finding for EVERY biomarker. Be comprehensive and ALWAYS give specific, actionable advice with real examples.`;
 
+      // Use gpt-4o-mini which is reliable and cost-effective
       const response = await openai.chat.completions.create({
-        model: "gpt-5-nano-2025-08-07", // Use smaller model for cost efficiency
+        model: "gpt-4o-mini-2024-07-18",
         messages: [
           { role: "system", content: `You are a health analyst extracting findings from medical data and explaining them clearly to non-medical users. ALWAYS respond in ${languageName}.` },
           { role: "user", content: extractionPrompt },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 2000,
+        max_completion_tokens: 4000, // Increased to handle multiple biomarkers
       });
 
       const content = response.choices[0]?.message?.content;

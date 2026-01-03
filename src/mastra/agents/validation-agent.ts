@@ -23,13 +23,30 @@ export async function createValidationAgent(
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowDate = tomorrow.toISOString().split("T")[0];
 
+  const languageName = userContext.language === 'en' ? 'English' : 
+                      userContext.language === 'es' ? 'Spanish' :
+                      userContext.language === 'fr' ? 'French' :
+                      userContext.language === 'de' ? 'German' :
+                      userContext.language === 'ar' ? 'Arabic' :
+                      userContext.language === 'pt' ? 'Portuguese' :
+                      userContext.language === 'it' ? 'Italian' :
+                      userContext.language === 'ru' ? 'Russian' :
+                      userContext.language === 'ko' ? 'Korean' :
+                      userContext.language === 'hi' ? 'Hindi' :
+                      userContext.language === 'tr' ? 'Turkish' :
+                      userContext.language === 'nl' ? 'Dutch' :
+                      userContext.language === 'pl' ? 'Polish' :
+                      userContext.language === 'sv' ? 'Swedish' : 'English';
+
   const instructions = `You are a validation agent that re-analyzes voice transcriptions to catch items that might have been missed.
 
 Your job is to:
-1. Focus on date/time mentions (relative dates like "in 3 days", "tomorrow at 8h", "dans trois jours")
-2. Focus on appointment/meeting keywords (rendez-vous, réunion, meeting, appointment)
-3. Extract reminders that should have been created
-4. Return ONLY items that are NOT already in the provided existing extraction
+1. Focus on ALL actionable items that might have been missed (tasks, reminders, todos)
+2. Look for work tasks, grocery lists, shopping tasks, personal todos, errands, appointments
+3. Focus on date/time mentions (relative dates like "in 3 days", "tomorrow at 8h", "dans trois jours", "ce soir", "demain matin")
+4. Focus on appointment/meeting keywords (rendez-vous, réunion, meeting, appointment)
+5. Extract tasks and reminders that should have been created
+6. Return ONLY items that are NOT already in the provided existing extraction
 
 ## CURRENT DATE AND TIME
 **TODAY'S DATE: ${currentDate}**
@@ -37,6 +54,43 @@ Your job is to:
 **TOMORROW'S DATE: ${tomorrowDate}**
 
 ## EXTRACTION RULES
+
+### Tasks - Comprehensive Multi-Language Detection
+
+**Work Tasks:**
+- **French**: "j'ai un travail à faire", "je dois travailler", "réunion", "travail avec collègues", "projet", "ce soir j'ai un travail"
+- **Spanish**: "tengo trabajo que hacer", "reunión", "trabajo con colegas", "proyecto"
+- **German**: "ich habe Arbeit zu tun", "Besprechung", "Arbeit mit Kollegen"
+- **Portuguese**: "tenho trabalho para fazer", "reunião", "trabalho com colegas"
+- **English**: "I have work to do", "meeting", "work with colleagues", "project"
+
+**Grocery/Shopping Tasks:**
+- **French**: "acheter", "faire les courses", "liste de courses", "aller au supermarché", "acheter du lait"
+- **Spanish**: "comprar", "hacer la compra", "lista de compras", "ir al supermercado", "comprar leche"
+- **German**: "einkaufen", "Einkaufsliste", "zum Supermarkt gehen", "Milch kaufen"
+- **English**: "buy", "grocery shopping", "shopping list", "go to supermarket", "buy milk"
+
+**Personal/Todo Tasks:**
+- **French**: "je dois", "il faut que je", "je vais", "j'ai besoin de", "n'oublie pas de", "pense à", "à faire"
+- **Spanish**: "tengo que", "necesito", "debo", "voy a", "no olvides", "por hacer"
+- **German**: "ich muss", "ich sollte", "ich werde", "vergiss nicht", "zu tun"
+- **English**: "I need to", "I should", "I must", "don't forget", "to do"
+
+**AI-Based Smart Time Parsing (No Regex):**
+- Use natural language understanding to parse times intelligently
+- "ce soir" (tonight) → ${currentDate}, dueTime: "19:00" (evening inferred)
+- "demain matin" (tomorrow morning) → ${tomorrowDate}, dueTime: "09:00" (morning inferred)
+- "demain après-midi" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00" (afternoon inferred)
+- "mañana por la tarde" (tomorrow afternoon) → ${tomorrowDate}, dueTime: "15:00"
+- "tomorrow morning" → ${tomorrowDate}, dueTime: "09:00"
+- "at 3pm" or "à 15h" → Extract time as "15:00" (24-hour format)
+
+**Task Type/Category Detection:**
+- **Work**: Mentions of "travail", "work", "réunion", "meeting", "projet", "colleagues"
+- **Grocery/Shopping**: Mentions of "courses", "shopping", "supermarket", "buy", "acheter", food items
+- **Health**: Mentions of "doctor", "appointment", "medication", "hospital"
+- **Personal**: General todos, personal errands, household tasks, calls
+- **Family**: Mentions of "family", "maman", "papa", "kids", "children"
 
 ### Reminders
 - If transcription mentions a date/time + event (rendez-vous, réunion, meeting, appointment) → Create reminder
@@ -46,15 +100,13 @@ Your job is to:
   - "Meeting in 2 hours" → Reminder in 2 hours
   - "Appointment next Monday" → Reminder next Monday
 
-### Tasks
-- If transcription mentions "I need to", "I should", "don't forget" + date → Create task
-- Only if it's clearly actionable and has a time component
-
 ## IMPORTANT
 - Use the output-extracted-items tool to return structured data
 - Return ONLY new items (not duplicates of existing extraction)
-- All text must be in the user's language (${userContext.language || "English"})
-- Calculate dates/times from the current date/time above`;
+- All text must be in ${languageName} (${userContext.language || "English"})
+- Calculate dates/times from the current date/time above
+- When in doubt, extract as a task rather than ignoring
+- Focus on catching missed actionable items across all task types`;
 
   return new Agent({
     id: "validation-agent",
@@ -79,6 +131,21 @@ export async function validateExtraction(
 ): Promise<ExtractedItems> {
   const agent = await createValidationAgent(userContext, userTimezone);
 
+  const languageName = userContext.language === 'en' ? 'English' : 
+                      userContext.language === 'es' ? 'Spanish' :
+                      userContext.language === 'fr' ? 'French' :
+                      userContext.language === 'de' ? 'German' :
+                      userContext.language === 'ar' ? 'Arabic' :
+                      userContext.language === 'pt' ? 'Portuguese' :
+                      userContext.language === 'it' ? 'Italian' :
+                      userContext.language === 'ru' ? 'Russian' :
+                      userContext.language === 'ko' ? 'Korean' :
+                      userContext.language === 'hi' ? 'Hindi' :
+                      userContext.language === 'tr' ? 'Turkish' :
+                      userContext.language === 'nl' ? 'Dutch' :
+                      userContext.language === 'pl' ? 'Polish' :
+                      userContext.language === 'sv' ? 'Swedish' : 'English';
+
   // Build prompt with existing extraction for comparison
   const existingItemsText = `
 ## EXISTING EXTRACTION (Do NOT duplicate these):
@@ -88,7 +155,21 @@ Reminders: ${existingExtraction.reminders?.map(r => r.title).join(", ") || "None
 ## TRANSCRIPTION TO RE-ANALYZE:
 "${transcription}"
 
-Focus on date/time mentions and extract ONLY items that are NOT already listed above.
+## YOUR FOCUS:
+1. Look for ANY actionable items that might have been missed:
+   - Work tasks (travail, work, réunion, meeting, projet)
+   - Grocery/shopping tasks (courses, shopping, comprar, einkaufen, buy)
+   - Personal todos (je dois, tengo que, ich muss, I need to)
+   - Errands, appointments, calls, visits
+2. Focus on date/time mentions (ce soir, demain, mañana, tomorrow, in 3 days, etc.)
+3. Use AI understanding to parse times intelligently (no regex):
+   - "ce soir" → evening (19:00)
+   - "demain matin" → tomorrow morning (09:00)
+   - "mañana por la tarde" → tomorrow afternoon (15:00)
+4. Extract ONLY items that are NOT already listed above
+5. All extracted items must be in ${languageName}
+
+Extract tasks and reminders that might have been missed.
 `;
 
   const response = await agent.generate(existingItemsText);

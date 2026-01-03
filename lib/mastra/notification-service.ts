@@ -94,9 +94,16 @@ export async function notifyAIContentReady(
     .replace(/_/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase());
 
+  // Generate dynamic title: "TypeLabel: DocumentTitle"
+  // Truncate if too long (max ~60 chars for readability)
+  const dynamicTitle = `${typeLabel}: ${documentTitle}`;
+  const title = dynamicTitle.length > 60 
+    ? `${dynamicTitle.substring(0, 57)}...` 
+    : dynamicTitle;
+
   return createNotification({
     userId,
-    title: "New Content Ready",
+    title,
     message: `I drafted a ${typeLabel}: "${documentTitle}"`,
     type: "ai_generated",
     relatedDocumentId: documentId,
@@ -120,6 +127,90 @@ export async function notifyProactiveSuggestion(
     type: "ai_generated",
     relatedDocumentId: documentId,
     deepLink: `/dashboard/pro?doc=${documentId}`,
+  });
+}
+
+/**
+ * Create a notification for an urgent task
+ */
+export async function notifyUrgentTask(
+  userId: string,
+  taskId: string,
+  taskTitle: string,
+  dueDate?: string,
+  dueTime?: string
+): Promise<{ success: boolean; error?: string }> {
+  // Format due date/time message
+  let message = taskTitle;
+  if (dueDate) {
+    const dueDateObj = new Date(dueDate);
+    const now = new Date();
+    const diffMs = dueDateObj.getTime() - now.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 0) {
+      message = `${taskTitle} - Overdue`;
+    } else if (diffMins < 60) {
+      message = `${taskTitle} - Due in ${diffMins} minutes`;
+    } else {
+      const hours = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      if (dueTime) {
+        message = `${taskTitle} - Due: ${dueDateObj.toLocaleDateString()} at ${dueTime}`;
+      } else {
+        message = `${taskTitle} - Due: ${dueDateObj.toLocaleDateString()}`;
+      }
+    }
+  }
+
+  const title = `Urgent Task: ${taskTitle}`;
+  const truncatedTitle = title.length > 60 ? `${title.substring(0, 57)}...` : title;
+
+  return createNotification({
+    userId,
+    title: truncatedTitle,
+    message,
+    type: "system",
+    deepLink: `/dashboard/tasks?task=${taskId}`,
+  });
+}
+
+/**
+ * Create a notification for a reminder
+ */
+export async function notifyReminder(
+  userId: string,
+  reminderId: string,
+  reminderTitle: string,
+  reminderTime: Date,
+  priority?: string
+): Promise<{ success: boolean; error?: string }> {
+  // Format reminder time message
+  const now = new Date();
+  const diffMs = reminderTime.getTime() - now.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  
+  let message = reminderTitle;
+  if (diffMins < 0) {
+    message = `${reminderTitle} - Overdue`;
+  } else if (diffMins < 60) {
+    message = `${reminderTitle} - In ${diffMins} minutes`;
+  } else {
+    const hours = Math.floor(diffMins / 60);
+    message = `${reminderTitle} - At ${reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  const title = priority === "urgent" 
+    ? `Urgent Reminder: ${reminderTitle}`
+    : `Reminder: ${reminderTitle}`;
+  const truncatedTitle = title.length > 60 ? `${title.substring(0, 57)}...` : title;
+
+  return createNotification({
+    userId,
+    title: truncatedTitle,
+    message,
+    type: "reminder",
+    deepLink: `/dashboard/tasks?reminder=${reminderId}`,
   });
 }
 
@@ -424,6 +515,174 @@ export function saveNotificationPreferences(
     localStorage.setItem("saydo_notification_prefs", JSON.stringify(updated));
   } catch {
     // Ignore errors
+  }
+}
+
+/**
+ * Check for urgent tasks and reminders and create notifications
+ * Avoids duplicates by checking if notification was created in last 30 minutes
+ */
+export async function checkAndNotifyUrgentItems(
+  userId: string
+): Promise<{ success: boolean; notificationsCreated: number; error?: string }> {
+  const supabase = getSupabaseClient();
+  const now = new Date();
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+  const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+  
+  let notificationsCreated = 0;
+
+  try {
+    // 1. Check for urgent tasks (priority="urgent" OR due within 1 hour, status="pending")
+    // Fetch urgent priority tasks
+    const { data: urgentPriorityTasks, error: urgentError } = await supabase
+      .from("tasks")
+      .select("id, title, priority, due_date, due_time, status")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .eq("priority", "urgent");
+
+    // Fetch tasks due within 1 hour
+    const { data: dueSoonTasks, error: dueSoonError } = await supabase
+      .from("tasks")
+      .select("id, title, priority, due_date, due_time, status")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .not("due_date", "is", null)
+      .lte("due_date", oneHourFromNow.toISOString());
+
+    const tasksError = urgentError || dueSoonError;
+    // Combine and deduplicate tasks
+    const urgentTasksMap = new Map();
+    if (urgentPriorityTasks) {
+      urgentPriorityTasks.forEach(task => urgentTasksMap.set(task.id, task));
+    }
+    if (dueSoonTasks) {
+      dueSoonTasks.forEach(task => urgentTasksMap.set(task.id, task));
+    }
+    const urgentTasks = Array.from(urgentTasksMap.values());
+
+    if (tasksError) {
+      console.error("[checkAndNotifyUrgentItems] Error fetching urgent tasks:", tasksError);
+    } else if (urgentTasks) {
+      for (const task of urgentTasks) {
+        // Check if task is actually urgent (priority="urgent" OR due within 1 hour)
+        const isUrgentPriority = task.priority === "urgent";
+        let isDueSoon = false;
+        
+        if (task.due_date) {
+          const dueDate = new Date(task.due_date);
+          if (task.due_time) {
+            const [hours, minutes] = task.due_time.split(':').map(Number);
+            dueDate.setHours(hours, minutes, 0, 0);
+          }
+          isDueSoon = dueDate.getTime() <= oneHourFromNow.getTime() && dueDate.getTime() >= now.getTime();
+        }
+
+        if (isUrgentPriority || isDueSoon) {
+          // Check if notification already exists for this task (within last 30 minutes)
+          const taskDeepLink = `/dashboard/tasks?task=${task.id}`;
+          const { data: existingNotification } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("deep_link", taskDeepLink)
+            .gte("created_at", thirtyMinutesAgo.toISOString())
+            .limit(1)
+            .maybeSingle();
+
+          if (!existingNotification) {
+            const result = await notifyUrgentTask(
+              userId,
+              task.id,
+              task.title,
+              task.due_date || undefined,
+              task.due_time || undefined
+            );
+            if (result.success) {
+              notificationsCreated++;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Check for upcoming reminders (reminder_time within 1 hour OR priority="urgent", not completed/snoozed)
+    // Fetch urgent priority reminders
+    const { data: urgentPriorityReminders, error: urgentReminderError } = await supabase
+      .from("reminders")
+      .select("id, title, reminder_time, priority, is_completed, is_snoozed")
+      .eq("user_id", userId)
+      .eq("is_completed", false)
+      .eq("is_snoozed", false)
+      .eq("priority", "urgent");
+
+    // Fetch reminders due within 1 hour
+    const { data: dueSoonReminders, error: dueSoonReminderError } = await supabase
+      .from("reminders")
+      .select("id, title, reminder_time, priority, is_completed, is_snoozed")
+      .eq("user_id", userId)
+      .eq("is_completed", false)
+      .eq("is_snoozed", false)
+      .lte("reminder_time", oneHourFromNow.toISOString())
+      .gte("reminder_time", now.toISOString());
+
+    const remindersError = urgentReminderError || dueSoonReminderError;
+    // Combine and deduplicate reminders
+    const remindersMap = new Map();
+    if (urgentPriorityReminders) {
+      urgentPriorityReminders.forEach(reminder => remindersMap.set(reminder.id, reminder));
+    }
+    if (dueSoonReminders) {
+      dueSoonReminders.forEach(reminder => remindersMap.set(reminder.id, reminder));
+    }
+    const upcomingReminders = Array.from(remindersMap.values());
+
+    if (remindersError) {
+      console.error("[checkAndNotifyUrgentItems] Error fetching reminders:", remindersError);
+    } else if (upcomingReminders) {
+      for (const reminder of upcomingReminders) {
+        // Check if reminder is actually due soon (within 1 hour) OR urgent
+        const reminderTime = new Date(reminder.reminder_time);
+        const isUrgentPriority = reminder.priority === "urgent";
+        const isDueSoon = reminderTime.getTime() <= oneHourFromNow.getTime() && reminderTime.getTime() >= now.getTime();
+
+        if (isUrgentPriority || isDueSoon) {
+          // Check if notification already exists for this reminder (within last 30 minutes)
+          const reminderDeepLink = `/dashboard/tasks?reminder=${reminder.id}`;
+          const { data: existingNotification } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("deep_link", reminderDeepLink)
+            .gte("created_at", thirtyMinutesAgo.toISOString())
+            .limit(1)
+            .maybeSingle();
+
+          if (!existingNotification) {
+            const result = await notifyReminder(
+              userId,
+              reminder.id,
+              reminder.title,
+              reminderTime,
+              reminder.priority || undefined
+            );
+            if (result.success) {
+              notificationsCreated++;
+            }
+          }
+        }
+      }
+    }
+
+    return { success: true, notificationsCreated };
+  } catch (error) {
+    console.error("[checkAndNotifyUrgentItems] Error:", error);
+    return {
+      success: false,
+      notificationsCreated,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 

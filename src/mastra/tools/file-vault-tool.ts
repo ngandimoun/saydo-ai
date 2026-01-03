@@ -173,7 +173,7 @@ async function extractPdfContent(fileUrl: string): Promise<ExtractionResult> {
           ],
         },
       ],
-      max_tokens: 4096,
+      max_completion_tokens: 4096,
     });
 
     return {
@@ -220,7 +220,7 @@ async function extractImageContent(fileUrl: string): Promise<ExtractionResult> {
           ],
         },
       ],
-      max_tokens: 4096,
+      max_completion_tokens: 4096,
     });
 
     return {
@@ -270,7 +270,7 @@ async function extractSpreadsheetContent(fileUrl: string): Promise<ExtractionRes
           content: `Analyze this spreadsheet data:\n${JSON.stringify(sheetsData, null, 2)}`,
         },
       ],
-      max_tokens: 4096,
+      max_completion_tokens: 4096,
     });
 
     return {
@@ -329,7 +329,7 @@ async function extractPresentationContent(fileUrl: string): Promise<ExtractionRe
           content: `Summarize this presentation and extract key points:\n${slideTexts}`,
         },
       ],
-      max_tokens: 2048,
+      max_completion_tokens: 2048,
     });
 
     return {
@@ -697,7 +697,7 @@ export const analyzeFileContentTool = createTool({
             content: `${prompts[analysisType]}\n\nContent:\n${content}`,
           },
         ],
-        max_tokens: 4096,
+        max_completion_tokens: 4096,
       });
 
       return {
